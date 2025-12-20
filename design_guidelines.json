@@ -1,0 +1,151 @@
+{
+  "design_system": {
+    "identity": {
+      "name": "Fixify",
+      "tagline": "See it. Say it. Report it.",
+      "archetype": "Civic Trust x AI Precision",
+      "vibe": "Empowering, Transparent, Efficient, Community-First"
+    },
+    "typography": {
+      "font_family": {
+        "headings": "Manrope, sans-serif",
+        "body": "Satoshi, Inter, sans-serif",
+        "mono": "JetBrains Mono, monospace"
+      },
+      "scale": {
+        "h1": "text-4xl md:text-6xl font-bold tracking-tight",
+        "h2": "text-3xl md:text-4xl font-semibold tracking-tight",
+        "h3": "text-2xl font-semibold",
+        "body_lg": "text-lg leading-relaxed",
+        "body_base": "text-base leading-relaxed text-muted-foreground",
+        "caption": "text-sm font-medium text-muted-foreground uppercase tracking-wider"
+      },
+      "instructions": "Use Manrope for all headings to give a modern, friendly civic feel. Use Satoshi or Inter for body text for maximum readability. Avoid generic 'Arial' look."
+    },
+    "colors": {
+      "palette": {
+        "primary": {
+          "DEFAULT": "#4F46E5",
+          "foreground": "#FFFFFF",
+          "description": "Electric Indigo - Represents trust and digital efficiency"
+        },
+        "secondary": {
+          "DEFAULT": "#0EA5E9",
+          "foreground": "#FFFFFF",
+          "description": "Civic Cyan - Used for 'Fixed' status and positive actions"
+        },
+        "accent": {
+          "DEFAULT": "#7C3AED",
+          "foreground": "#FFFFFF",
+          "description": "Deep Violet - Used for AI features (Fixi Bot)"
+        },
+        "destructive": {
+          "DEFAULT": "#E11D48",
+          "foreground": "#FFFFFF",
+          "description": "Urgent Red - For critical issues or 'Report' actions"
+        },
+        "background": {
+          "light": "#F8FAFC",
+          "dark": "#0F172A"
+        },
+        "surface": {
+          "light": "#FFFFFF",
+          "dark": "#1E293B"
+        }
+      },
+      "gradients": {
+        "hero": "bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-500",
+        "card_hover": "hover:bg-gradient-to-br hover:from-white hover:to-slate-50 dark:hover:from-slate-800 dark:hover:to-slate-900",
+        "ai_glow": "bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 blur-xl"
+      }
+    },
+    "spacing": {
+      "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+      "section_padding": "py-16 md:py-24",
+      "card_padding": "p-6 md:p-8",
+      "grid_gap": "gap-6 md:gap-8"
+    },
+    "radius": {
+      "default": "rounded-xl",
+      "button": "rounded-full",
+      "card": "rounded-2xl"
+    },
+    "shadows": {
+      "card": "shadow-[0_2px_8px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-all duration-300",
+      "float": "shadow-[0_20px_40px_rgba(79,70,229,0.15)]"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 h-11 px-8 rounded-full font-medium transition-transform active:scale-95 shadow-lg shadow-primary/25",
+      "secondary": "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 h-11 px-8 rounded-full font-medium transition-colors",
+      "ghost": "hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-full px-4"
+    },
+    "cards": {
+      "feature": "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 hover:border-indigo-100 transition-all group relative overflow-hidden",
+      "report": "bg-white dark:bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all",
+      "stat": "bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-100 dark:border-slate-700"
+    },
+    "inputs": {
+      "default": "h-12 rounded-lg border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20 bg-white dark:bg-slate-900"
+    },
+    "badges": {
+      "status_open": "bg-orange-100 text-orange-700 border-orange-200 px-3 py-1 rounded-full text-xs font-semibold",
+      "status_fixed": "bg-emerald-100 text-emerald-700 border-emerald-200 px-3 py-1 rounded-full text-xs font-semibold",
+      "category": "bg-slate-100 text-slate-600 border-slate-200 px-2.5 py-0.5 rounded-md text-xs font-medium"
+    }
+  },
+  "layouts": {
+    "marketing_grid": "grid grid-cols-1 md:grid-cols-12 gap-8",
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-4 gap-6",
+    "bento_hero": {
+      "main": "col-span-1 md:col-span-8 row-span-2 bg-indigo-600 rounded-3xl p-8 text-white relative overflow-hidden",
+      "side_top": "col-span-1 md:col-span-4 bg-slate-900 text-white rounded-3xl p-8",
+      "side_bottom": "col-span-1 md:col-span-4 bg-white border border-slate-200 rounded-3xl p-8"
+    }
+  },
+  "assets": {
+    "images": {
+      "hero_bg": {
+        "url": "https://images.unsplash.com/photo-1754666525519-6d6406ad9afc?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Kathmandu Durbar Square Sunset",
+        "usage": "Hero section background or main visual"
+      },
+      "report_road": {
+        "url": "https://images.unsplash.com/photo-1696577826570-2a95fe9635b9?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Nepal Street Scene",
+        "usage": "Example of a road issue report"
+      },
+      "report_waste": {
+        "url": "https://images.unsplash.com/photo-1748531002040-18bbf55fffd1?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Waste Collection",
+        "usage": "Example of a waste issue report"
+      },
+      "community_hub": {
+        "url": "https://images.unsplash.com/photo-1739381650437-49c73c5d4daf?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Community Volunteers",
+        "usage": "Community Hub page header"
+      },
+      "fixi_avatar": {
+        "url": "https://images.unsplash.com/photo-1531746790731-6c087fecd65a?auto=format&fit=crop&q=80",
+        "alt": "Fixi AI Avatar",
+        "usage": "Chatbot widget icon and AI features"
+      }
+    },
+    "icons": "Use Lucide React (already installed). Preferred icons: MapPin, Camera, AlertTriangle, CheckCircle2, Users, Bot, BarChart3."
+  },
+  "motion": {
+    "hover_lift": "transition-transform duration-300 hover:-translate-y-1",
+    "fade_in": "animate-in fade-in duration-500 slide-in-from-bottom-4",
+    "pulse_slow": "animate-pulse duration-[3000ms]"
+  },
+  "universal_guidelines": [
+    "Do not use generic 'Bootstrap' layouts. Use the Bento Grid system defined above.",
+    "Ensure all text has sufficient contrast. Use slate-600 for secondary text, not gray-400.",
+    "Interactive elements must have a hover state that changes color or lifts.",
+    "Use 'data-testid' on all buttons and inputs.",
+    "For the Map, use 'react-leaflet' with a custom tile layer (e.g., CartoDB Voyager) to match the clean UI.",
+    "The 'Fixi' chatbot should be a floating widget, not a full page.",
+    "Forms should be split into steps if they have more than 5 fields."
+  ]
+}
