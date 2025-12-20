@@ -68,7 +68,7 @@ const FixiChatbot = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-48px)] bg-white rounded-2xl shadow-2xl shadow-slate-900/20 border border-slate-200 overflow-hidden animate-fade-in" data-testid="fixi-chat-window">
+        <div className="fixed bottom-6 right-6 z-[9999] w-[380px] max-w-[calc(100vw-48px)] bg-white rounded-2xl shadow-2xl shadow-slate-900/20 border border-slate-200 overflow-hidden animate-fade-in" data-testid="fixi-chat-window">
           {/* Header */}
           <div className="bg-gradient-to-r from-violet-600 to-purple-600 p-4">
             <div className="flex items-center justify-between">
