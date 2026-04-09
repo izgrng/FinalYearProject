@@ -1,0 +1,48 @@
+services:
+  backend:
+    build: ./backend
+    container_name: fixify-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+      - DB_NAME=fixify
+    depends_on:
+      - mongo
+
+  frontend:
+    build: ./frontend
+    container_name: fixify-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      - backend
+
+  mongo:
+    image: mongo:7
+    container_name: fixify-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: fixify-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo
+      - ME_CONFIG_BASICAUTH_USERNAME=fixify
+      - ME_CONFIG_BASICAUTH_PASSWORD=fixify123@
+    depends_on:
+      - mongo
+
+volumes:
+  mongo_data:

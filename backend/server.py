@@ -13,10 +13,12 @@ from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
 import base64
-from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+import joblib
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+MODEL_PATH = ROOT_DIR / "ml" / "model.joblib"
+_ml_model = None
 
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL')
@@ -26,7 +28,6 @@ db = client[os.environ.get('DB_NAME')]
 # JWT Config
 JWT_SECRET = os.environ.get('JWT_SECRET', 'fixify_secret_key')
 JWT_ALGORITHM = "HS256"
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
 # Create the main app
 app = FastAPI(title="Fixify API")
@@ -56,13 +57,24 @@ class UserResponse(BaseModel):
     is_community_member: bool
     created_at: str
 
+class PublicUserResponse(BaseModel):
+    id: str
+    full_name: str
+    role: str
+    is_community_member: bool
+    created_at: str
+
 class ReportCreate(BaseModel):
     title: str
     description: str
     latitude: float
     longitude: float
-    location_name: str
+    location_name: Optional[str] = None
     image_base64: Optional[str] = None
+
+class ReportUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
 
 class ReportResponse(BaseModel):
     id: str
@@ -105,6 +117,22 @@ class ChatMessage(BaseModel):
 class MembershipRequest(BaseModel):
     reason: str
 
+class CommentCreate(BaseModel):
+    text: str
+
+class NotificationResponse(BaseModel):
+    id: str
+    user_id: str
+    type: str
+    report_id: str
+    message: str
+    created_at: str
+    read: bool
+
+class CommunityPostCreate(BaseModel):
+    title: str
+    content: str
+
 # ==================== AUTH HELPERS ====================
 
 def hash_password(password: str) -> str:
@@ -143,84 +171,98 @@ async def get_moderator(credentials: HTTPAuthorizationCredentials = Depends(secu
 # ==================== AI SERVICES ====================
 
 async def analyze_image_content(image_base64: str) -> dict:
-    """Analyze if image contains a valid community problem"""
-    try:
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"img-{uuid.uuid4()}",
-            system_message="You are an image analyzer for a civic reporting platform. Analyze images to determine if they show legitimate community problems (road damage, waste, water issues, safety hazards, etc.) or inappropriate content (selfies, random photos, unrelated images)."
-        ).with_model("openai", "gpt-4o")
-        
-        image_content = ImageContent(image_base64=image_base64)
-        message = UserMessage(
-            text="Analyze this image. Is it a valid community problem report? Respond with JSON: {\"is_valid\": true/false, \"reason\": \"explanation\", \"detected_issue\": \"brief description of issue if valid\"}",
-            file_contents=[image_content]
-        )
-        
-        response = await chat.send_message(message)
-        
-        # Parse response
-        import json
-        try:
-            # Clean response
-            clean_response = response.strip()
-            if clean_response.startswith("```"):
-                clean_response = clean_response.split("```")[1]
-                if clean_response.startswith("json"):
-                    clean_response = clean_response[4:]
-            result = json.loads(clean_response)
-            return result
-        except:
-            return {"is_valid": True, "reason": "Unable to fully analyze", "detected_issue": "Reported issue"}
-    except Exception as e:
-        logger.error(f"Image analysis error: {e}")
-        return {"is_valid": True, "reason": "Analysis unavailable", "detected_issue": "Reported issue"}
+    """Analyze if image contains a valid community problem.
+    AI provider removed; default to accept and mark as unverified.
+    """
+    return {
+        "is_valid": True,
+        "reason": "AI analysis disabled.",
+        "detected_issue": "Reported issue"
+    }
 
 async def categorize_report(title: str, description: str, image_analysis: str = "") -> str:
-    """AI triage to categorize the report"""
-    try:
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"triage-{uuid.uuid4()}",
-            system_message="You are an AI triage system for categorizing civic issues. Categories: Waste (garbage, litter, dumping), Road (potholes, damaged roads, traffic issues), Water (leaks, flooding, contamination), Safety (crime, harassment, abuse, dangerous areas), Infrastructure (electricity, buildings, bridges), Environment (pollution, deforestation), Other. Respond with ONLY the category name."
-        ).with_model("openai", "gpt-4o")
-        
-        prompt = f"Title: {title}\nDescription: {description}\n{f'Image shows: {image_analysis}' if image_analysis else ''}\n\nCategory:"
-        response = await chat.send_message(UserMessage(text=prompt))
-        
-        category = response.strip()
-        valid_categories = ["Waste", "Road", "Water", "Safety", "Infrastructure", "Environment", "Other"]
-        for cat in valid_categories:
-            if cat.lower() in category.lower():
-                return cat
-        return "Other"
-    except Exception as e:
-        logger.error(f"Categorization error: {e}")
-        return "Other"
+    """ML-based triage with rule-based fallback."""
+    global _ml_model
+    if _ml_model is None and MODEL_PATH.exists():
+        try:
+            _ml_model = joblib.load(MODEL_PATH)
+        except Exception as e:
+            logger.error(f"ML model load error: {e}")
+            _ml_model = None
+
+    if _ml_model is not None:
+        try:
+            text = f"{title} {description} {image_analysis}".strip()
+            pred = _ml_model.predict([text])[0]
+            return pred
+        except Exception as e:
+            logger.error(f"ML categorization error: {e}")
+
+    text = f"{title} {description} {image_analysis}".lower()
+
+    if any(word in text for word in ["streetlight", "street light", "light", "lamp", "electric", "electricity", "power", "wire", "cable"]):
+        return "Electricity & Street Facilities"
+    if any(word in text for word in ["water", "leak", "pipe", "sewage", "drain", "drainage", "flood", "tap"]):
+        return "Water & Drainage"
+    if any(word in text for word in ["garbage", "waste", "litter", "dump", "trash", "bin", "sanitation", "clean"]):
+        return "Waste & Sanitation"
+    if any(word in text for word in ["road", "street", "pothole", "traffic", "bridge", "footpath", "sidewalk", "transport"]):
+        return "Road & Transport"
+    if any(word in text for word in ["unsafe", "danger", "harass", "abuse", "crime", "attack", "security"]):
+        return "Public Safety"
+    if any(word in text for word in ["pollution", "burn", "smoke", "tree", "forest", "environment", "river"]):
+        return "Environment"
+    if any(word in text for word in ["park", "toilet", "school", "community", "facility", "building", "playground"]):
+        return "Public Facilities"
+    return "Other / Unclassified"
 
 async def fixi_chat(message: str, session_id: str) -> str:
-    """Fixi AI chatbot for user guidance"""
-    try:
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=session_id,
-            system_message="""You are Fixi, a friendly AI assistant for Fixify - a civic problem reporting platform in Nepal. 
-Your role is to:
-1. Guide users on how to report community issues
-2. Explain how the platform works
-3. Share civic awareness messages
-4. Encourage community participation
-5. Answer questions about categories (Waste, Road, Water, Safety, Infrastructure, Environment)
+    """Fixi chatbot for user guidance (rule-based)."""
+    text = message.lower().strip()
 
-Be helpful, friendly, and encourage users to report problems in their community. Keep responses concise but informative.
-Start by welcoming them if they say hi/hello. Always be positive and supportive."""
-        ).with_model("openai", "gpt-4o")
-        
-        response = await chat.send_message(UserMessage(text=message))
-        return response
-    except Exception as e:
-        logger.error(f"Fixi chat error: {e}")
-        return "I'm having trouble responding right now. Please try again later!"
+    if any(greet in text for greet in ["hi", "hello", "hey", "namaste"]):
+        return "Hi! I’m Fixi. I can help you report issues, explain categories, and guide you around Fixify."
+
+    if "report" in text or "issue" in text:
+        return (
+            "To report an issue: go to Report Issue, add a title and description, "
+            "drop a pin on the map, and submit. You can optionally add a photo."
+        )
+
+    if "category" in text or "type" in text:
+        return (
+            "Categories include Waste, Road, Water, Safety, Infrastructure, Environment, and Other. "
+            "Pick the closest match to your issue."
+        )
+
+    if "community" in text or "event" in text:
+        return (
+            "Community Hub lets you view events and request membership. "
+            "A moderator approves membership requests."
+        )
+
+    if "location" in text or "map" in text:
+        return (
+            "Use the map to select the exact location. You can also click 'Use My Location' "
+            "to auto-set your current position."
+        )
+
+    if "moderator" in text:
+        return (
+            "Moderators can approve membership requests and create events. "
+            "Use the Moderator Panel after logging in as a moderator."
+        )
+
+    if "login" in text or "sign in" in text or "signup" in text:
+        return (
+            "You can create an account on the Sign Up page, then log in from the Login page. "
+            "After logging in, you can submit reports and access the dashboard."
+        )
+
+    return (
+        "I can help with reporting issues, categories, maps, community hub, and moderator actions. "
+        "Tell me what you’d like to do."
+    )
 
 # ==================== AUTH ENDPOINTS ====================
 
@@ -282,6 +324,19 @@ async def get_me(user: dict = Depends(get_current_user)):
         "is_community_member": user.get("is_community_member", False)
     }
 
+@api_router.get("/users/{user_id}")
+async def get_public_user(user_id: str):
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0, "email": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "id": user["id"],
+        "full_name": user["full_name"],
+        "role": user.get("role", "user"),
+        "is_community_member": user.get("is_community_member", False),
+        "created_at": user.get("created_at")
+    }
+
 # ==================== REPORTS ENDPOINTS ====================
 
 @api_router.post("/reports")
@@ -310,14 +365,16 @@ async def create_report(report_data: ReportCreate, user: dict = Depends(get_curr
         "status": "Open",
         "latitude": report_data.latitude,
         "longitude": report_data.longitude,
-        "location_name": report_data.location_name,
+        "location_name": report_data.location_name or "Pinned location",
         "image_base64": report_data.image_base64,
         "user_id": user["id"],
         "user_name": user["full_name"],
         "ai_analysis": image_analysis,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "upvotes": 0,
-        "upvoted_by": []
+        "upvoted_by": [],
+        "comments": [],
+        "comments_count": 0
     }
     await db.reports.insert_one(report_doc)
     
@@ -353,7 +410,7 @@ async def get_reports(
     if location:
         query["location_name"] = {"$regex": location, "$options": "i"}
     
-    reports = await db.reports.find(query, {"_id": 0, "image_base64": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    reports = await db.reports.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
     return reports
 
 @api_router.get("/reports/{report_id}")
@@ -362,6 +419,80 @@ async def get_report(report_id: str):
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report
+
+@api_router.put("/reports/{report_id}")
+async def update_report(report_id: str, update: ReportUpdate, user: dict = Depends(get_current_user)):
+    report = await db.reports.find_one({"id": report_id})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report.get("user_id") != user["id"] and user.get("role") != "moderator":
+        raise HTTPException(status_code=403, detail="Not allowed to edit this report")
+
+    updates = {}
+    if update.title is not None:
+        updates["title"] = update.title
+    if update.description is not None:
+        updates["description"] = update.description
+
+    if updates:
+        # Re-categorize if text changes
+        category = await categorize_report(
+            updates.get("title", report.get("title", "")),
+            updates.get("description", report.get("description", "")),
+            report.get("ai_analysis", "")
+        )
+        updates["category"] = category
+        await db.reports.update_one({"id": report_id}, {"$set": updates})
+
+    updated = await db.reports.find_one({"id": report_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/reports/{report_id}")
+async def delete_report(report_id: str, user: dict = Depends(get_current_user)):
+    report = await db.reports.find_one({"id": report_id})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report.get("user_id") != user["id"] and user.get("role") != "moderator":
+        raise HTTPException(status_code=403, detail="Not allowed to delete this report")
+
+    await db.reports.delete_one({"id": report_id})
+    return {"message": "Report deleted"}
+
+@api_router.get("/reports/{report_id}/comments")
+async def get_comments(report_id: str):
+    report = await db.reports.find_one({"id": report_id}, {"_id": 0, "comments": 1})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return report.get("comments", [])
+
+@api_router.post("/reports/{report_id}/comments")
+async def add_comment(report_id: str, comment: CommentCreate, user: dict = Depends(get_current_user)):
+    report = await db.reports.find_one({"id": report_id})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    comment_doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "text": comment.text,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.reports.update_one(
+        {"id": report_id},
+        {"$push": {"comments": comment_doc}, "$inc": {"comments_count": 1}}
+    )
+    if report.get("user_id") and report.get("user_id") != user["id"]:
+        notif_doc = {
+            "id": str(uuid.uuid4()),
+            "user_id": report["user_id"],
+            "type": "comment",
+            "report_id": report_id,
+            "message": f"{user['full_name']} commented on your report",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "read": False
+        }
+        await db.notifications.insert_one(notif_doc)
+    return comment_doc
 
 @api_router.post("/reports/{report_id}/upvote")
 async def upvote_report(report_id: str, user: dict = Depends(get_current_user)):
@@ -383,12 +514,47 @@ async def upvote_report(report_id: str, user: dict = Depends(get_current_user)):
             {"id": report_id},
             {"$push": {"upvoted_by": user["id"]}, "$inc": {"upvotes": 1}}
         )
+        if report.get("user_id") and report.get("user_id") != user["id"]:
+            notif_doc = {
+                "id": str(uuid.uuid4()),
+                "user_id": report["user_id"],
+                "type": "like",
+                "report_id": report_id,
+                "message": f"{user['full_name']} liked your report",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "read": False
+            }
+            await db.notifications.insert_one(notif_doc)
         return {"message": "Upvoted", "upvotes": report["upvotes"] + 1}
 
 @api_router.get("/reports/user/mine")
 async def get_my_reports(user: dict = Depends(get_current_user)):
-    reports = await db.reports.find({"user_id": user["id"]}, {"_id": 0, "image_base64": 0}).sort("created_at", -1).to_list(100)
+    reports = await db.reports.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return reports
+
+@api_router.get("/reports/user/{user_id}")
+async def get_user_reports(user_id: str):
+    reports = await db.reports.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return reports
+
+@api_router.get("/notifications")
+async def get_notifications(user: dict = Depends(get_current_user)):
+    user_key = user["id"]
+    if user.get("role") == "moderator":
+        user_key = "moderator"
+    notifications = await db.notifications.find(
+        {"user_id": user_key},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(20).to_list(20)
+    return notifications
+
+@api_router.post("/notifications/mark-read")
+async def mark_notifications_read(user: dict = Depends(get_current_user)):
+    await db.notifications.update_many(
+        {"user_id": user["id"], "read": False},
+        {"$set": {"read": True}}
+    )
+    return {"message": "Notifications marked as read"}
 
 # ==================== DASHBOARD STATS ====================
 
@@ -444,6 +610,16 @@ async def request_membership(request: MembershipRequest, user: dict = Depends(ge
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.membership_requests.insert_one(request_doc)
+    # Notify moderators
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": "moderator",
+        "type": "membership_request",
+        "report_id": request_doc["id"],
+        "message": f"{user['full_name']} requested to join the community",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "read": False
+    })
     return {"message": "Membership request submitted", "status": "pending"}
 
 @api_router.get("/community/membership-requests")
@@ -459,11 +635,31 @@ async def approve_membership(request_id: str, user: dict = Depends(get_moderator
     
     await db.membership_requests.update_one({"id": request_id}, {"$set": {"status": "approved"}})
     await db.users.update_one({"id": request["user_id"]}, {"$set": {"is_community_member": True}})
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": request["user_id"],
+        "type": "membership_approved",
+        "report_id": request_id,
+        "message": "Your community membership was approved",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "read": False
+    })
     return {"message": "Membership approved"}
 
 @api_router.post("/community/membership-requests/{request_id}/reject")
 async def reject_membership(request_id: str, user: dict = Depends(get_moderator)):
+    req = await db.membership_requests.find_one({"id": request_id})
     await db.membership_requests.update_one({"id": request_id}, {"$set": {"status": "rejected"}})
+    if req:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": req["user_id"],
+            "type": "membership_rejected",
+            "report_id": request_id,
+            "message": "Your community membership was rejected",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "read": False
+        })
     return {"message": "Membership rejected"}
 
 # ==================== EVENTS ====================
@@ -512,6 +708,81 @@ async def join_event(event_id: str, user: dict = Depends(get_current_user)):
 async def leave_event(event_id: str, user: dict = Depends(get_current_user)):
     await db.events.update_one({"id": event_id}, {"$pull": {"participants": user["id"]}})
     return {"message": "Left event"}
+
+# ==================== COMMUNITY POSTS ====================
+
+@api_router.post("/community/posts")
+async def create_community_post(post: CommunityPostCreate, user: dict = Depends(get_current_user)):
+    if not user.get("is_community_member"):
+        raise HTTPException(status_code=403, detail="Community membership required")
+    post_doc = {
+        "id": str(uuid.uuid4()),
+        "title": post.title,
+        "content": post.content,
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.community_posts.insert_one(post_doc)
+    # Notify moderators
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": "moderator",
+        "type": "community_post",
+        "report_id": post_doc["id"],
+        "message": f"{user['full_name']} submitted a community post",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "read": False
+    })
+    return {"message": "Post submitted for approval"}
+
+@api_router.get("/community/posts")
+async def get_community_posts(status: Optional[str] = "approved"):
+    query = {}
+    if status:
+        query["status"] = status
+    posts = await db.community_posts.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return posts
+
+@api_router.get("/community/posts/pending")
+async def get_pending_posts(user: dict = Depends(get_moderator)):
+    posts = await db.community_posts.find({"status": "pending"}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return posts
+
+@api_router.post("/community/posts/{post_id}/approve")
+async def approve_post(post_id: str, user: dict = Depends(get_moderator)):
+    post = await db.community_posts.find_one({"id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    await db.community_posts.update_one({"id": post_id}, {"$set": {"status": "approved"}})
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": post["user_id"],
+        "type": "post_approved",
+        "report_id": post_id,
+        "message": "Your community post was approved",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "read": False
+    })
+    return {"message": "Post approved"}
+
+@api_router.post("/community/posts/{post_id}/reject")
+async def reject_post(post_id: str, user: dict = Depends(get_moderator)):
+    post = await db.community_posts.find_one({"id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    await db.community_posts.update_one({"id": post_id}, {"$set": {"status": "rejected"}})
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": post["user_id"],
+        "type": "post_rejected",
+        "report_id": post_id,
+        "message": "Your community post was rejected",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "read": False
+    })
+    return {"message": "Post rejected"}
 
 # ==================== FIXI CHATBOT ====================
 
