@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -8,7 +8,7 @@ import { Badge } from "../components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { 
   Users, Calendar, MapPin, UserPlus, Clock, 
-  CheckCircle2, AlertCircle, Loader2, Heart
+  CheckCircle2, AlertCircle, Loader2, Heart, FileText
 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
@@ -18,24 +18,46 @@ const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const CommunityHub = () => {
   const { user, api } = useAuth();
   const [events, setEvents] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [postForm, setPostForm] = useState({ title: "", content: "" });
+  const [posting, setPosting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [membershipStatus, setMembershipStatus] = useState(null);
   const [membershipReason, setMembershipReason] = useState("");
   const [requestLoading, setRequestLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  useEffect(() => {
-    fetchEvents();
-  }, []);
-
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/events`);
       setEvents(response.data);
+      const postsRes = await api.get("/community/posts");
+      setPosts(postsRes.data || []);
     } catch (error) {
       console.error("Error fetching events:", error);
     } finally {
       setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
+
+  const submitPost = async () => {
+    if (!postForm.title || !postForm.content) {
+      toast.error("Please fill all post fields");
+      return;
+    }
+    setPosting(true);
+    try {
+      await api.post("/community/posts", postForm);
+      toast.success("Post submitted for approval");
+      setPostForm({ title: "", content: "" });
+    } catch (error) {
+      toast.error("Failed to submit post");
+    } finally {
+      setPosting(false);
     }
   };
 
@@ -266,6 +288,51 @@ const CommunityHub = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Community Posts */}
+        <div className="mt-12">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText className="w-5 h-5 text-indigo-600" />
+            <h3 className="text-xl font-semibold text-slate-900">Community Posts</h3>
+          </div>
+
+          {user?.is_community_member && (
+            <Card className="border-0 shadow-sm mb-6">
+              <CardContent className="p-4 space-y-3">
+                <Input
+                  placeholder="Post title"
+                  value={postForm.title}
+                  onChange={(e) => setPostForm({ ...postForm, title: e.target.value })}
+                />
+                <Textarea
+                  placeholder="Share your update..."
+                  value={postForm.content}
+                  onChange={(e) => setPostForm({ ...postForm, content: e.target.value })}
+                  className="min-h-[120px]"
+                />
+                <Button onClick={submitPost} disabled={posting}>
+                  {posting ? "Submitting..." : "Submit for Approval"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {posts.length === 0 ? (
+            <p className="text-slate-600">No community posts yet.</p>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-4">
+              {posts.map((post) => (
+                <Card key={post.id} className="border-0 shadow-sm">
+                  <CardContent className="p-4">
+                    <h4 className="font-semibold text-slate-900 mb-2">{post.title}</h4>
+                    <p className="text-sm text-slate-600 mb-2">{post.content}</p>
+                    <p className="text-xs text-slate-500">Posted by {post.user_name}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Info Section */}
         <div className="mt-16 grid md:grid-cols-3 gap-6">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -8,13 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Shield, Users, Calendar, Plus, Check, X, Loader2 } from "lucide-react";
+import { Shield, Users, Calendar, Plus, Check, X, Loader2, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 const ModeratorPanel = () => {
   const { api } = useAuth();
   const [requests, setRequests] = useState([]);
   const [events, setEvents] = useState([]);
+  const [pendingPosts, setPendingPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
@@ -22,24 +23,26 @@ const ModeratorPanel = () => {
     title: "", description: "", event_date: "", location: "", max_participants: 20
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const [reqRes, eventsRes] = await Promise.all([
+      const [reqRes, eventsRes, postsRes] = await Promise.all([
         api.get("/community/membership-requests"),
-        api.get("/events")
+        api.get("/events"),
+        api.get("/community/posts/pending")
       ]);
       setRequests(reqRes.data);
       setEvents(eventsRes.data);
+      setPendingPosts(postsRes.data);
     } catch (error) {
       console.error("Error:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleApprove = async (requestId) => {
     setActionLoading(requestId);
@@ -83,6 +86,26 @@ const ModeratorPanel = () => {
     }
   };
 
+  const handleApprovePost = async (postId) => {
+    try {
+      await api.post(`/community/posts/${postId}/approve`);
+      toast.success("Post approved");
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to approve post");
+    }
+  };
+
+  const handleRejectPost = async (postId) => {
+    try {
+      await api.post(`/community/posts/${postId}/reject`);
+      toast.success("Post rejected");
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to reject post");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -106,6 +129,11 @@ const ModeratorPanel = () => {
             <TabsTrigger value="events" className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
               Events
+            </TabsTrigger>
+            <TabsTrigger value="posts" className="flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Posts
+              {pendingPosts.length > 0 && <Badge className="ml-1">{pendingPosts.length}</Badge>}
             </TabsTrigger>
           </TabsList>
 
@@ -202,6 +230,37 @@ const ModeratorPanel = () => {
                   </div>
                 ) : (
                   <p className="text-center text-slate-500 py-8">No events created yet</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="posts">
+            <Card className="border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle>Pending Community Posts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {pendingPosts.length === 0 ? (
+                  <p className="text-slate-600">No pending posts.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingPosts.map((post) => (
+                      <div key={post.id} className="p-4 border border-slate-200 rounded-xl">
+                        <h4 className="font-semibold text-slate-900 mb-1">{post.title}</h4>
+                        <p className="text-sm text-slate-600 mb-2">{post.content}</p>
+                        <p className="text-xs text-slate-500 mb-3">Posted by {post.user_name}</p>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => handleApprovePost(post.id)}>
+                            Approve
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => handleRejectPost(post.id)}>
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

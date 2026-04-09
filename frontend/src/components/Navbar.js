@@ -8,13 +8,31 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from "./ui/dropdown-menu";
-import { MapPin, Menu, User, LogOut, LayoutDashboard, Users, Shield } from "lucide-react";
-import { useState } from "react";
+import { Menu, User, LogOut, LayoutDashboard, Users, Shield, Bell, Share2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 const Navbar = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, api } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (!user) return;
+      try {
+        const res = await api.get("/notifications");
+        setNotifications(res.data);
+        const unread = res.data.filter((n) => !n.read).length;
+        setUnreadCount(unread);
+      } catch (error) {
+        // ignore
+      }
+    };
+    loadNotifications();
+  }, [user, api]);
 
   const handleLogout = () => {
     logout();
@@ -22,32 +40,39 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <nav className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-slate-200/70 shadow-sm">
+      <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group" data-testid="nav-logo">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/40 transition-shadow">
-              <MapPin className="w-5 h-5 text-white" />
-            </div>
+            <img
+              src="/images/Logo.png"
+              alt="Fixify logo"
+              className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/40 transition-shadow"
+            />
             <span className="text-xl font-bold font-[Manrope] text-slate-900">Fixify</span>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-1">
             <Link to="/dashboard">
-              <Button variant="ghost" className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-full" data-testid="nav-dashboard">
+              <Button variant="ghost" className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full text-base" data-testid="nav-dashboard">
                 Dashboard
               </Button>
             </Link>
+            <Link to="/#how-it-works">
+              <Button variant="ghost" className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full text-base" data-testid="nav-how-it-works">
+                How it works
+              </Button>
+            </Link>
             <Link to="/community">
-              <Button variant="ghost" className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-full" data-testid="nav-community">
+              <Button variant="ghost" className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full text-base" data-testid="nav-community">
                 Community Hub
               </Button>
             </Link>
             {user && (
               <Link to="/report">
-                <Button className="ml-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full shadow-lg shadow-indigo-500/25" data-testid="nav-report-btn">
+                <Button className="ml-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full shadow-lg shadow-indigo-500/25 text-base" data-testid="nav-report-btn">
                   Report Issue
                 </Button>
               </Link>
@@ -56,6 +81,79 @@ const Navbar = () => {
 
           {/* User Menu */}
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full hover:bg-slate-100"
+              onClick={async () => {
+                const shareUrl = window.location.origin;
+                if (navigator.share) {
+                  try {
+                    await navigator.share({ title: "Fixify", url: shareUrl });
+                    return;
+                  } catch (error) {
+                    // fallback to copy
+                  }
+                }
+                try {
+                  await navigator.clipboard.writeText(shareUrl);
+                  toast.success("Link copied to clipboard");
+                } catch (error) {
+                  toast.error("Failed to copy link");
+                }
+              }}
+              data-testid="nav-share"
+            >
+              <Share2 className="h-5 w-5 text-slate-700" />
+            </Button>
+            <DropdownMenu
+              onOpenChange={async (open) => {
+                if (open && user && unreadCount > 0) {
+                  try {
+                    await api.post("/notifications/mark-read");
+                    setUnreadCount(0);
+                  } catch (error) {
+                    // ignore
+                  }
+                }
+              }}
+            >
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-100" data-testid="nav-notifications">
+                  <div className="relative">
+                    <Bell className="h-5 w-5 text-slate-700" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-2 -right-2 h-4 min-w-[16px] rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <div className="px-3 py-2 border-b border-slate-100">
+                  <p className="text-sm font-medium text-slate-900">Notifications</p>
+                  <p className="text-xs text-slate-500">Latest activity</p>
+                </div>
+                {notifications.length === 0 ? (
+                  <>
+                    <DropdownMenuItem className="text-sm text-slate-600">
+                      No notifications yet.
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-xs text-slate-500">
+                      Notifications will appear when someone likes or comments.
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  notifications.slice(0, 10).map((n) => (
+                    <DropdownMenuItem key={n.id} className="text-sm text-slate-700">
+                      {n.message}
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -95,12 +193,12 @@ const Navbar = () => {
             ) : (
               <div className="flex items-center gap-2">
                 <Link to="/login">
-                  <Button variant="ghost" className="text-slate-600 hover:text-slate-900 rounded-full" data-testid="nav-login">
+                  <Button variant="ghost" className="text-slate-700 hover:text-slate-900 rounded-full text-base" data-testid="nav-login">
                     Login
                   </Button>
                 </Link>
                 <Link to="/signup">
-                  <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full" data-testid="nav-signup">
+                  <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full text-base" data-testid="nav-signup">
                     Sign Up
                   </Button>
                 </Link>

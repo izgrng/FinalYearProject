@@ -5,13 +5,16 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { MapPin, Mail, Lock, Loader2 } from "lucide-react";
+import { Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import axios from "axios";
 
 const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: ""
@@ -32,20 +35,35 @@ const Login = () => {
     }
   };
 
+  const handleSeedModerator = async () => {
+    setSeeding(true);
+    try {
+      const apiBase = process.env.REACT_APP_BACKEND_URL;
+      await axios.post(`${apiBase}/api/seed/moderator`);
+      toast.success("Moderator account ready. Use moderator@fixify.com / Moderator123!");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to seed moderator");
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12 bg-gradient-to-br from-slate-50 to-indigo-50">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-              <MapPin className="w-6 h-6 text-white" />
-            </div>
+            <img
+              src="/images/Logo.png"
+              alt="Fixify logo"
+              className="w-14 h-14 rounded-xl object-cover shadow-lg shadow-indigo-500/25"
+            />
             <span className="text-2xl font-bold text-slate-900 font-[Manrope]">Fixify</span>
           </Link>
         </div>
 
-        <Card className="border-0 shadow-xl shadow-slate-200/50">
+        <Card className="border-0 shadow-xl shadow-slate-200/50 animate-fade-in">
           <CardHeader className="space-y-1 pb-6">
             <CardTitle className="text-2xl font-bold text-center font-[Manrope]">Welcome back</CardTitle>
             <CardDescription className="text-center">
@@ -77,19 +95,33 @@ const Login = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <Input
                     id="password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="pl-10 h-12 rounded-xl"
+                    className="pl-10 pr-10 h-12 rounded-xl"
                     required
                     data-testid="login-password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
 
-              <Button 
-                type="submit" 
+              <div className="text-right">
+                <a href="mailto:support@fixify.com" className="text-xs text-slate-600 hover:text-slate-900">
+                  Forgot password?
+                </a>
+              </div>
+
+              <Button
+                type="submit"
                 className="w-full h-12 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 font-medium"
                 disabled={loading}
                 data-testid="login-submit"
@@ -122,6 +154,23 @@ const Login = () => {
                 <br />
                 <span className="font-mono">Moderator123!</span>
               </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full mt-3"
+                onClick={handleSeedModerator}
+                disabled={seeding}
+                data-testid="seed-moderator-btn"
+              >
+                {seeding ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Seeding...
+                  </>
+                ) : (
+                  "Seed Moderator Account"
+                )}
+              </Button>
             </div>
           </CardContent>
         </Card>

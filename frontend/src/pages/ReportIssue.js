@@ -9,7 +9,7 @@ import { Label } from "../components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { 
   Camera, MapPin, FileText, Upload, X, Loader2, 
-  CheckCircle2, AlertTriangle, Sparkles 
+  CheckCircle2, AlertTriangle, Sparkles, Navigation 
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -30,6 +30,10 @@ const ReportIssue = () => {
   });
   const [imagePreview, setImagePreview] = useState(null);
   const [aiResult, setAiResult] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [mapCenter, setMapCenter] = useState(null);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -70,6 +74,71 @@ const ReportIssue = () => {
       latitude: position.lat,
       longitude: position.lng
     });
+    reverseGeocode(position.lat, position.lng);
+  };
+
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+      );
+      const data = await res.json();
+      if (data?.display_name) {
+        setFormData((prev) => ({ ...prev, location_name: data.display_name }));
+      }
+    } catch (error) {
+      // ignore
+    }
+  };
+
+  const handleSearchLocation = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`
+      );
+      const data = await res.json();
+      if (data?.length > 0) {
+        const first = data[0];
+        const lat = parseFloat(first.lat);
+        const lng = parseFloat(first.lon);
+        setMapCenter({ lat, lng });
+        handleLocationSelect({ lat, lng });
+        if (first.display_name) {
+          setFormData((prev) => ({ ...prev, location_name: first.display_name }));
+        }
+      } else {
+        toast.error("Location not found");
+      }
+    } catch (error) {
+      toast.error("Failed to search location");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude
+        };
+        handleLocationSelect(coords);
+        setLocating(false);
+      },
+      () => {
+        toast.error("Unable to access your location");
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   const handleSubmit = async (e) => {
@@ -77,11 +146,6 @@ const ReportIssue = () => {
     
     if (!formData.latitude || !formData.longitude) {
       toast.error("Please select a location on the map");
-      return;
-    }
-
-    if (!formData.location_name.trim()) {
-      toast.error("Please enter a location name");
       return;
     }
 
@@ -143,7 +207,7 @@ const ReportIssue = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
+                <Label htmlFor="title">Title <span className="text-red-500">*</span></Label>
                 <Input
                   id="title"
                   placeholder="e.g., Large pothole on main road"
@@ -156,7 +220,7 @@ const ReportIssue = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">Description <span className="text-red-500">*</span></Label>
                 <Textarea
                   id="description"
                   placeholder="Provide details about the issue, its severity, and any other relevant information..."
@@ -243,9 +307,33 @@ const ReportIssue = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="rounded-xl overflow-hidden border border-slate-200">
+                <div className="p-3 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row gap-2">
+                  <Input
+                    placeholder="Search location (e.g., London, UK)"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSearchLocation}
+                    disabled={searching}
+                  >
+                    {searching ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Searching...
+                      </>
+                    ) : (
+                      "Search"
+                    )}
+                  </Button>
+                </div>
                 <LocationPicker 
                   onLocationSelect={handleLocationSelect}
                   selectedLocation={formData.latitude ? { lat: formData.latitude, lng: formData.longitude } : null}
+                  mapCenter={mapCenter}
                 />
               </div>
 
@@ -258,18 +346,32 @@ const ReportIssue = () => {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="location_name">Location Name / Address</Label>
-                <Input
-                  id="location_name"
-                  placeholder="e.g., Near Ratna Park, Kathmandu"
-                  value={formData.location_name}
-                  onChange={(e) => setFormData({ ...formData, location_name: e.target.value })}
-                  className="h-12"
-                  required
-                  data-testid="location-name-input"
-                />
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleUseMyLocation}
+                disabled={locating}
+                className="w-full"
+                data-testid="use-my-location-btn"
+              >
+                {locating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Locating...
+                  </>
+                ) : (
+                  <>
+                    <Navigation className="w-4 h-4 mr-2" />
+                    Use My Location
+                  </>
+                )}
+              </Button>
+
+              {formData.location_name && (
+                <div className="text-xs text-slate-600">
+                  <span className="font-medium">Location:</span> {formData.location_name}
+                </div>
+              )}
 
               <div className="flex gap-4">
                 <Button 
@@ -281,7 +383,7 @@ const ReportIssue = () => {
                 </Button>
                 <Button 
                   onClick={handleSubmit}
-                  disabled={loading || !formData.latitude || !formData.location_name}
+                  disabled={loading || !formData.latitude}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700"
                   data-testid="submit-report-btn"
                 >

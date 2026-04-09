@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ReportMap } from "../components/MapComponent";
 import { Button } from "../components/ui/button";
@@ -8,7 +9,7 @@ import { Badge } from "../components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { 
   BarChart3, MapPin, AlertTriangle, CheckCircle2, 
-  TrendingUp, Search, Filter, Clock, ThumbsUp
+  TrendingUp, Search, Filter, Clock, ThumbsUp, MessageSquare
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import axios from "axios";
@@ -16,18 +17,21 @@ import axios from "axios";
 const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const categoryColors = {
-  Waste: "#f97316",
-  Road: "#6366f1",
-  Water: "#0ea5e9",
-  Safety: "#ef4444",
-  Infrastructure: "#8b5cf6",
-  Environment: "#22c55e",
-  Other: "#64748b"
+  "Road & Transport": "#1f6feb",
+  "Waste & Sanitation": "#f97316",
+  "Water & Drainage": "#0ea5e9",
+  "Electricity & Street Facilities": "#eab308",
+  "Public Safety": "#ef4444",
+  "Environment": "#22c55e",
+  "Public Facilities": "#8b5cf6",
+  "Other / Unclassified": "#64748b"
 };
 
 const Dashboard = () => {
   const { user, api } = useAuth();
+  const location = useLocation();
   const [reports, setReports] = useState([]);
+  const [allReports, setAllReports] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
@@ -36,16 +40,18 @@ const Dashboard = () => {
     location: ""
   });
   const [selectedReport, setSelectedReport] = useState(null);
+  const [commentsOpen, setCommentsOpen] = useState({});
+  const [commentsByReport, setCommentsByReport] = useState({});
+  const [commentDrafts, setCommentDrafts] = useState({});
+  const [nearbyOnly, setNearbyOnly] = useState(false);
+  const [userCoords, setUserCoords] = useState(null);
+  const mapRef = useRef(null);
 
-  useEffect(() => {
-    fetchData();
-  }, [filters]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const params = new URLSearchParams();
-      if (filters.category) params.append("category", filters.category);
-      if (filters.status) params.append("status", filters.status);
+      if (filters.category && filters.category !== "all") params.append("category", filters.category);
+      if (filters.status && filters.status !== "all") params.append("status", filters.status);
       if (filters.location) params.append("location", filters.location);
 
       const [reportsRes, statsRes] = await Promise.all([
@@ -53,12 +59,105 @@ const Dashboard = () => {
         axios.get(`${API_URL}/dashboard/stats`)
       ]);
       
-      setReports(reportsRes.data);
+      setAllReports(reportsRes.data);
       setStats(statsRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
+    }
+  }, [filters]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const isNearby = params.get("nearby") === "1";
+    setNearbyOnly(isNearby);
+    if (isNearby && !userCoords && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => {
+          setUserCoords(null);
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+  }, [location.search, userCoords]);
+
+  useEffect(() => {
+    if (!nearbyOnly || !userCoords) {
+      setReports(allReports);
+      return;
+    }
+    const withinKm = 5;
+    const toRad = (v) => (v * Math.PI) / 180;
+    const haversine = (a, b) => {
+      const R = 6371;
+      const dLat = toRad(b.lat - a.lat);
+      const dLng = toRad(b.lng - a.lng);
+      const lat1 = toRad(a.lat);
+      const lat2 = toRad(b.lat);
+      const h =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.sin(dLng / 2) * Math.sin(dLng / 2) * Math.cos(lat1) * Math.cos(lat2);
+      return 2 * R * Math.asin(Math.sqrt(h));
+    };
+    const filtered = allReports.filter((r) =>
+      haversine(userCoords, { lat: r.latitude, lng: r.longitude }) <= withinKm
+    );
+    setReports(filtered);
+  }, [nearbyOnly, userCoords, allReports]);
+
+  const handleLike = async (reportId) => {
+    if (!user) return;
+    try {
+      const res = await api.post(`/reports/${reportId}/upvote`);
+      setReports((prev) =>
+        prev.map((r) => (r.id === reportId ? { ...r, upvotes: res.data.upvotes } : r))
+      );
+    } catch (error) {
+      console.error("Failed to like report", error);
+    }
+  };
+
+  const toggleComments = async (reportId) => {
+    const isOpen = commentsOpen[reportId];
+    setCommentsOpen((prev) => ({ ...prev, [reportId]: !isOpen }));
+    if (!isOpen && !commentsByReport[reportId]) {
+      try {
+        const res = await api.get(`/reports/${reportId}/comments`);
+        setCommentsByReport((prev) => ({ ...prev, [reportId]: res.data }));
+      } catch (error) {
+        console.error("Failed to load comments", error);
+      }
+    }
+  };
+
+  const submitComment = async (reportId) => {
+    if (!user) return;
+    const text = (commentDrafts[reportId] || "").trim();
+    if (!text) return;
+    try {
+      const res = await api.post(`/reports/${reportId}/comments`, { text });
+      setCommentsByReport((prev) => ({
+        ...prev,
+        [reportId]: [...(prev[reportId] || []), res.data]
+      }));
+      setCommentDrafts((prev) => ({ ...prev, [reportId]: "" }));
+    } catch (error) {
+      console.error("Failed to add comment", error);
+    }
+  };
+
+  const focusMap = (report) => {
+    setSelectedReport(report);
+    if (mapRef.current) {
+      mapRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
@@ -155,7 +254,7 @@ const Dashboard = () => {
         </div>
 
         {/* Filters */}
-        <Card className="border-0 shadow-sm mb-8">
+        <Card className="border-0 shadow-sm mb-8 relative z-20">
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-4 items-center">
               <div className="flex items-center gap-2 text-slate-600">
@@ -167,7 +266,7 @@ const Dashboard = () => {
                 <SelectTrigger className="w-[160px]" data-testid="filter-category">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[1000]">
                   <SelectItem value="all">All Categories</SelectItem>
                   {Object.keys(categoryColors).map(cat => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
@@ -179,7 +278,7 @@ const Dashboard = () => {
                 <SelectTrigger className="w-[140px]" data-testid="filter-status">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[1000]">
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="Open">Open</SelectItem>
                   <SelectItem value="Fixed">Fixed</SelectItem>
@@ -205,13 +304,18 @@ const Dashboard = () => {
                 Clear
               </Button>
             </div>
+            {nearbyOnly && !userCoords && (
+              <p className="mt-3 text-xs text-slate-500">
+                Enable location access to see nearby reports.
+              </p>
+            )}
           </CardContent>
         </Card>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Map */}
           <div className="lg:col-span-2">
-            <Card className="border-0 shadow-sm overflow-hidden">
+            <Card className="border-0 shadow-sm overflow-hidden" ref={mapRef}>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <MapPin className="w-5 h-5 text-indigo-600" />
@@ -312,10 +416,9 @@ const Dashboard = () => {
             {reports.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {reports.slice(0, 6).map((report) => (
-                  <div 
+                  <div
                     key={report.id}
-                    className="p-4 bg-white border border-slate-200 rounded-xl hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => setSelectedReport(report)}
+                    className="p-4 bg-white border border-slate-200 rounded-xl hover:shadow-md transition-shadow"
                     data-testid={`report-card-${report.id}`}
                   >
                     <div className="flex items-start justify-between mb-3">
@@ -329,8 +432,34 @@ const Dashboard = () => {
                         {report.status}
                       </Badge>
                     </div>
-                    <h3 className="font-semibold text-slate-900 mb-1 line-clamp-1">{report.title}</h3>
+                    <a
+                      href={`/reports/${report.id}`}
+                      className="font-semibold text-slate-900 mb-1 line-clamp-1 block hover:underline"
+                    >
+                      {report.title}
+                    </a>
+                    {report.image_base64 && (
+                      <img
+                        src={`data:image/jpeg;base64,${report.image_base64}`}
+                        alt={report.title}
+                        className="mb-3 h-32 w-full rounded-lg object-cover"
+                      />
+                    )}
                     <p className="text-sm text-slate-600 line-clamp-2 mb-3">{report.description}</p>
+                    <p className="text-xs text-slate-500 mb-2">
+                      Posted by{" "}
+                      {report.user_id ? (
+                        <a
+                          href={`/users/${report.user_id}`}
+                          className="text-slate-700 underline hover:text-slate-900"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {report.user_name || "Anonymous"}
+                        </a>
+                      ) : (
+                        report.user_name || "Anonymous"
+                      )}
+                    </p>
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <div className="flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
@@ -341,6 +470,89 @@ const Dashboard = () => {
                         <span>{report.upvotes || 0}</span>
                       </div>
                     </div>
+                    <div className="mt-3 flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="text-xs text-slate-600 hover:text-slate-900 flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          focusMap(report);
+                        }}
+                      >
+                        <MapPin className="w-3 h-3" />
+                        View on Map
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs text-slate-600 hover:text-slate-900 flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLike(report.id);
+                        }}
+                      >
+                        <ThumbsUp className="w-3 h-3" />
+                        Like
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs text-slate-600 hover:text-slate-900 flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleComments(report.id);
+                        }}
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        Comments
+                      </button>
+                    </div>
+                    {commentsOpen[report.id] && (
+                      <div className="mt-3 border-t border-slate-200 pt-3">
+                        <div className="space-y-2">
+                          {(commentsByReport[report.id] || []).map((comment) => (
+                            <div key={comment.id} className="text-xs text-slate-700">
+                              {comment.user_id ? (
+                                <a
+                                  href={`/users/${comment.user_id}`}
+                                  className="font-medium underline hover:text-slate-900"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {comment.user_name}
+                                </a>
+                              ) : (
+                                <span className="font-medium">{comment.user_name}</span>
+                              )}
+                              {": "}
+                              {comment.text}
+                            </div>
+                          ))}
+                          {(commentsByReport[report.id] || []).length === 0 && (
+                            <p className="text-xs text-slate-500">No comments yet.</p>
+                          )}
+                        </div>
+                        {user && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <input
+                              value={commentDrafts[report.id] || ""}
+                              onChange={(e) =>
+                                setCommentDrafts((prev) => ({ ...prev, [report.id]: e.target.value }))
+                              }
+                              placeholder="Write a comment..."
+                              className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                submitComment(report.id);
+                              }}
+                            >
+                              Post
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <p className="text-xs text-slate-400 mt-2">{formatDate(report.created_at)}</p>
                   </div>
                 ))}

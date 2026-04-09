@@ -3,6 +3,7 @@ import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 import FixiChatbot from "./components/FixiChatbot";
+import CookieBanner from "./components/CookieBanner";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -11,6 +12,8 @@ import ReportIssue from "./pages/ReportIssue";
 import CommunityHub from "./pages/CommunityHub";
 import Profile from "./pages/Profile";
 import ModeratorPanel from "./pages/ModeratorPanel";
+import PublicProfile from "./pages/PublicProfile";
+import ReportDetail from "./pages/ReportDetail";
 import "./App.css";
 
 const ProtectedRoute = ({ children }) => {
@@ -41,9 +44,12 @@ function AppContent() {
         <Route path="/report" element={<ProtectedRoute><ReportIssue /></ProtectedRoute>} />
         <Route path="/community" element={<CommunityHub />} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/users/:id" element={<PublicProfile />} />
+        <Route path="/reports/:id" element={<ReportDetail />} />
         <Route path="/moderator" element={<ModeratorRoute><ModeratorPanel /></ModeratorRoute>} />
       </Routes>
       {user && <FixiChatbot />}
+      <CookieBanner />
       <Toaster position="top-right" />
     </div>
   );

@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
-import { MessageCircle, X, Send, Bot, User, Sparkles } from "lucide-react";
+import { MessageCircle, X, Send, User, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 const FixiChatbot = () => {
@@ -62,7 +62,11 @@ const FixiChatbot = () => {
         className={`fixed bottom-6 right-6 z-[9999] w-14 h-14 rounded-full bg-gradient-to-br from-violet-600 to-purple-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all hover:scale-105 flex items-center justify-center ${isOpen ? 'hidden' : ''}`}
         data-testid="fixi-chat-btn"
       >
-        <MessageCircle className="w-6 h-6" />
+        <img
+          src="/images/Fixi.png"
+          alt="Fixi AI"
+          className="w-8 h-8 rounded-full object-cover"
+        />
         <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse" />
       </button>
 
@@ -73,9 +77,11 @@ const FixiChatbot = () => {
           <div className="bg-gradient-to-r from-violet-600 to-purple-600 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
-                  <Bot className="w-5 h-5 text-white" />
-                </div>
+                <img
+                  src="/images/Fixi.png"
+                  alt="Fixi AI"
+                  className="w-10 h-10 rounded-full object-cover border border-white/30"
+                />
                 <div>
                   <h3 className="font-semibold text-white flex items-center gap-1">
                     Fixi AI
@@ -109,7 +115,15 @@ const FixiChatbot = () => {
                       ? "bg-indigo-100 text-indigo-600" 
                       : "bg-purple-100 text-purple-600"
                   }`}>
-                    {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                    {msg.role === "user" ? (
+                      <User className="w-4 h-4" />
+                    ) : (
+                      <img
+                        src="/images/Fixi.png"
+                        alt="Fixi AI"
+                        className="w-5 h-5 rounded-full object-cover"
+                      />
+                    )}
                   </div>
                   <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                     msg.role === "user"
@@ -122,9 +136,11 @@ const FixiChatbot = () => {
               ))}
               {loading && (
                 <div className="flex gap-2">
-                  <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
-                    <Bot className="w-4 h-4" />
-                  </div>
+                  <img
+                    src="/images/Fixi.png"
+                    alt="Fixi AI"
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
                   <div className="bg-slate-100 px-4 py-3 rounded-2xl rounded-bl-sm">
                     <div className="flex gap-1">
                       <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />

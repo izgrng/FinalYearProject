@@ -5,13 +5,15 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { MapPin, Mail, Lock, User, Loader2 } from "lucide-react";
+import { Mail, Lock, User, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 const Signup = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
@@ -21,7 +23,7 @@ const Signup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (formData.password !== formData.confirmPassword) {
       toast.error("Passwords do not match");
       return;
@@ -51,14 +53,16 @@ const Signup = () => {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-              <MapPin className="w-6 h-6 text-white" />
-            </div>
+            <img
+              src="/images/Logo.png"
+              alt="Fixify logo"
+              className="w-14 h-14 rounded-xl object-cover shadow-lg shadow-indigo-500/25"
+            />
             <span className="text-2xl font-bold text-slate-900 font-[Manrope]">Fixify</span>
           </Link>
         </div>
 
-        <Card className="border-0 shadow-xl shadow-slate-200/50">
+        <Card className="border-0 shadow-xl shadow-slate-200/50 animate-fade-in">
           <CardHeader className="space-y-1 pb-6">
             <CardTitle className="text-2xl font-bold text-center font-[Manrope]">Create an account</CardTitle>
             <CardDescription className="text-center">
@@ -107,14 +111,22 @@ const Signup = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <Input
                     id="password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="pl-10 h-12 rounded-xl"
+                    className="pl-10 pr-10 h-12 rounded-xl"
                     required
                     data-testid="signup-password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
 
@@ -124,19 +136,28 @@ const Signup = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <Input
                     id="confirmPassword"
-                    type="password"
+                    type={showConfirmPassword ? "text" : "password"}
                     placeholder="••••••••"
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                    className="pl-10 h-12 rounded-xl"
+                    className="pl-10 pr-10 h-12 rounded-xl"
                     required
                     data-testid="signup-confirm-password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
+                <p className="text-xs text-slate-500">Use at least 6 characters.</p>
               </div>
 
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="w-full h-12 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 font-medium"
                 disabled={loading}
                 data-testid="signup-submit"
