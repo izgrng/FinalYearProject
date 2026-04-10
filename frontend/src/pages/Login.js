@@ -7,13 +7,11 @@ import { Label } from "../components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
 
 const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -35,18 +33,6 @@ const Login = () => {
     }
   };
 
-  const handleSeedModerator = async () => {
-    setSeeding(true);
-    try {
-      const apiBase = process.env.REACT_APP_BACKEND_URL;
-      await axios.post(`${apiBase}/api/seed/moderator`);
-      toast.success("Moderator account ready. Use moderator@fixify.com / Moderator123!");
-    } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to seed moderator");
-    } finally {
-      setSeeding(false);
-    }
-  };
 
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12 bg-gradient-to-br from-slate-50 to-indigo-50">
@@ -146,32 +132,6 @@ const Login = () => {
               </p>
             </div>
 
-            {/* Demo Credentials */}
-            <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <p className="text-xs text-slate-500 text-center mb-2">Demo Moderator Account</p>
-              <p className="text-sm text-slate-700 text-center">
-                <span className="font-mono">moderator@fixify.com</span>
-                <br />
-                <span className="font-mono">Moderator123!</span>
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full mt-3"
-                onClick={handleSeedModerator}
-                disabled={seeding}
-                data-testid="seed-moderator-btn"
-              >
-                {seeding ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Seeding...
-                  </>
-                ) : (
-                  "Seed Moderator Account"
-                )}
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>

@@ -812,28 +812,6 @@ async def get_chat_history(user: dict = Depends(get_current_user)):
     ).sort("created_at", -1).limit(50).to_list(50)
     return history
 
-# ==================== SEED MODERATOR ====================
-
-@api_router.post("/seed/moderator")
-async def seed_moderator():
-    """Create a default moderator account"""
-    existing = await db.users.find_one({"email": "moderator@fixify.com"})
-    if existing:
-        return {"message": "Moderator already exists", "email": "moderator@fixify.com"}
-    
-    user_id = str(uuid.uuid4())
-    user_doc = {
-        "id": user_id,
-        "email": "moderator@fixify.com",
-        "password": hash_password("Moderator123!"),
-        "full_name": "Fixify Moderator",
-        "role": "moderator",
-        "is_community_member": True,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.users.insert_one(user_doc)
-    return {"message": "Moderator created", "email": "moderator@fixify.com", "password": "Moderator123!"}
-
 # ==================== ROOT ====================
 
 @api_router.get("/")
