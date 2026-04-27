@@ -114,7 +114,7 @@ const Home = () => {
             <div className="text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur rounded-full text-white/90 text-sm mb-6">
                 <Globe className="w-4 h-4" />
-                Empowering Nepal's Communities
+                Empowering local Communities
               </div>
               
               <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 font-[Manrope] tracking-tight">
