@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: fixify-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DB_NAME
+        value: fixify
+      - key: CORS_ORIGINS
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: MONGO_URL
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_CHAT_MODEL
+        value: openrouter/free
+      - key: OPENROUTER_CATEGORY_MODEL
+        value: openrouter/free
+      - key: OPENROUTER_VISION_MODEL
+        value: openrouter/free
+      - key: CLIP_MODEL_NAME
+        value: openai/clip-vit-base-patch32
+      - key: OPENROUTER_REFERER
+        sync: false
+      - key: OPENROUTER_TITLE
+        value: Fixify
