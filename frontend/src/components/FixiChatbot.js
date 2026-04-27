@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
-import { MessageCircle, X, Send, User, Sparkles } from "lucide-react";
+import { X, Send, User } from "lucide-react";
 import { toast } from "sonner";
 
 const FixiChatbot = () => {
@@ -59,41 +59,38 @@ const FixiChatbot = () => {
       {/* Chat Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 z-[9999] w-14 h-14 rounded-full bg-gradient-to-br from-violet-600 to-purple-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all hover:scale-105 flex items-center justify-center ${isOpen ? 'hidden' : ''}`}
+        className={`fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-xl shadow-slate-900/15 ring-1 ring-slate-200 transition-all hover:-translate-y-0.5 hover:shadow-2xl ${isOpen ? 'hidden' : ''}`}
         data-testid="fixi-chat-btn"
       >
         <img
           src="/images/Fixi.png"
           alt="Fixi AI"
-          className="w-8 h-8 rounded-full object-cover"
+          className="h-9 w-9 rounded-full object-cover"
         />
         <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse" />
       </button>
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-[9999] w-[380px] max-w-[calc(100vw-48px)] bg-white rounded-2xl shadow-2xl shadow-slate-900/20 border border-slate-200 overflow-hidden animate-fade-in" data-testid="fixi-chat-window">
+        <div className="fixed bottom-6 right-6 z-[9999] w-[380px] max-w-[calc(100vw-48px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/15 animate-fade-in" data-testid="fixi-chat-window">
           {/* Header */}
-          <div className="bg-gradient-to-r from-violet-600 to-purple-600 p-4">
+          <div className="border-b border-slate-200 bg-white px-4 py-3.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img
                   src="/images/Fixi.png"
                   alt="Fixi AI"
-                  className="w-10 h-10 rounded-full object-cover border border-white/30"
+                  className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
                 />
                 <div>
-                  <h3 className="font-semibold text-white flex items-center gap-1">
-                    Fixi AI
-                    <Sparkles className="w-4 h-4" />
-                  </h3>
-                  <p className="text-xs text-white/80">Your civic assistant</p>
+                  <h3 className="font-semibold text-slate-900">Fixi AI</h3>
+                  <p className="text-xs text-slate-500">Civic reporting assistant</p>
                 </div>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="text-white hover:bg-white/20 rounded-full"
+                className="rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                 onClick={() => setIsOpen(false)}
                 data-testid="fixi-close-btn"
               >
@@ -103,8 +100,8 @@ const FixiChatbot = () => {
           </div>
 
           {/* Messages */}
-          <ScrollArea className="h-[350px] p-4" ref={scrollRef}>
-            <div className="flex flex-col gap-4">
+          <ScrollArea className="h-[360px] bg-slate-50/70 px-4 py-4" ref={scrollRef}>
+            <div className="flex flex-col gap-3">
               {messages.map((msg, idx) => (
                 <div 
                   key={idx} 
@@ -112,8 +109,8 @@ const FixiChatbot = () => {
                 >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                     msg.role === "user" 
-                      ? "bg-indigo-100 text-indigo-600" 
-                      : "bg-purple-100 text-purple-600"
+                      ? "bg-slate-200 text-slate-700" 
+                      : "bg-white ring-1 ring-slate-200"
                   }`}>
                     {msg.role === "user" ? (
                       <User className="w-4 h-4" />
@@ -125,10 +122,10 @@ const FixiChatbot = () => {
                       />
                     )}
                   </div>
-                  <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                  <div className={`max-w-[82%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
                     msg.role === "user"
-                      ? "bg-indigo-600 text-white rounded-br-sm"
-                      : "bg-slate-100 text-slate-700 rounded-bl-sm"
+                      ? "bg-slate-900 text-white rounded-br-sm"
+                      : "bg-white text-slate-700 rounded-bl-sm ring-1 ring-slate-200"
                   }`}>
                     {msg.content}
                   </div>
@@ -141,7 +138,7 @@ const FixiChatbot = () => {
                     alt="Fixi AI"
                     className="w-8 h-8 rounded-full object-cover"
                   />
-                  <div className="bg-slate-100 px-4 py-3 rounded-2xl rounded-bl-sm">
+                  <div className="rounded-2xl rounded-bl-sm bg-white px-4 py-3 ring-1 ring-slate-200">
                     <div className="flex gap-1">
                       <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                       <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
@@ -154,21 +151,21 @@ const FixiChatbot = () => {
           </ScrollArea>
 
           {/* Input */}
-          <div className="p-4 border-t border-slate-200 bg-slate-50">
+          <div className="border-t border-slate-200 bg-white p-4">
             <div className="flex gap-2">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask Fixi anything..."
-                className="flex-1 rounded-full bg-white border-slate-200 focus:border-purple-400"
+                placeholder="Ask about reports, categories, maps..."
+                className="flex-1 rounded-full border-slate-200 bg-slate-50 focus:border-slate-400"
                 disabled={loading}
                 data-testid="fixi-input"
               />
               <Button 
                 onClick={sendMessage}
                 disabled={loading || !input.trim()}
-                className="rounded-full bg-purple-600 hover:bg-purple-700 w-10 h-10 p-0"
+                className="h-10 w-10 rounded-full bg-slate-900 p-0 hover:bg-slate-800"
                 data-testid="fixi-send-btn"
               >
                 <Send className="w-4 h-4" />

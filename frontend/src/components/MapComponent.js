@@ -21,6 +21,15 @@ const categoryColors = {
   "Public Facilities": "#8b5cf6",
   "Other / Unclassified": "#64748b"
 };
+const DEFAULT_CENTER = [27.7172, 85.3240]; // Kathmandu, Nepal
+
+const statusTone = (status) => {
+  if (status === "Fixed") return "bg-green-100 text-green-700";
+  if (status === "Needs Review") return "bg-amber-100 text-amber-700";
+  if (status === "Under Review") return "bg-violet-100 text-violet-700";
+  if (status === "In Progress") return "bg-indigo-100 text-indigo-700";
+  return "bg-orange-100 text-orange-700";
+};
 
 const createCustomIcon = (category) => {
   const color = categoryColors[category] || categoryColors.Other;
@@ -90,90 +99,172 @@ const FlyToLocation = ({ position }) => {
 };
 
 export const ReportMap = ({ reports, onMarkerClick, selectedReport }) => {
-  const defaultCenter = [27.7172, 85.3240]; // Kathmandu, Nepal
+  const [userCenter, setUserCenter] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState("");
+
+  const requestLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation not supported.");
+      return;
+    }
+    setLocating(true);
+    setLocationError("");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserCenter([pos.coords.latitude, pos.coords.longitude]);
+        setLocating(false);
+      },
+      () => {
+        setLocationError("Location permission denied.");
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
+  useEffect(() => {
+    requestLocation();
+  }, []);
 
   return (
-    <MapContainer
-      center={defaultCenter}
-      zoom={12}
-      className="w-full h-full rounded-2xl"
-      style={{ minHeight: "400px" }}
-      scrollWheelZoom={false}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      {reports.map((report) => (
-        <Marker
-          key={report.id}
-          position={[report.latitude, report.longitude]}
-          icon={createCustomIcon(report.category)}
-          eventHandlers={{
-            click: () => onMarkerClick && onMarkerClick(report)
-          }}
-        >
-          <Popup>
-            <div className="min-w-[200px]">
-              <div className="flex items-center gap-2 mb-2">
-                <span 
-                  className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
-                  style={{ background: categoryColors[report.category] }}
-                >
-                  {report.category}
-                </span>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                  report.status === "Open" 
-                    ? "bg-orange-100 text-orange-700" 
-                    : "bg-green-100 text-green-700"
-                }`}>
-                  {report.status}
-                </span>
+    <div className="relative w-full h-full">
+      <MapContainer
+        center={userCenter || DEFAULT_CENTER}
+        zoom={12}
+        className="w-full h-full rounded-2xl"
+        style={{ minHeight: "400px" }}
+        scrollWheelZoom={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {reports.map((report) => (
+          <Marker
+            key={report.id}
+            position={[report.latitude, report.longitude]}
+            icon={createCustomIcon(report.category)}
+            eventHandlers={{
+              click: () => onMarkerClick && onMarkerClick(report)
+            }}
+          >
+            <Popup>
+              <div className="min-w-[200px]">
+                <div className="flex items-center gap-2 mb-2">
+                  <span 
+                    className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                    style={{ background: categoryColors[report.category] }}
+                  >
+                    {report.category}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                    statusTone(report.status)
+                  }`}>
+                    {report.status}
+                  </span>
+                </div>
+                <h3 className="font-semibold text-slate-900 mb-1">{report.title}</h3>
+                <p className="text-sm text-slate-600 line-clamp-2">{report.description}</p>
+                <p className="text-xs text-slate-500 mt-1">Posted by {report.user_name || "Anonymous"}</p>
+                <p className="text-xs text-slate-400 mt-2">{report.location_name}</p>
               </div>
-              <h3 className="font-semibold text-slate-900 mb-1">{report.title}</h3>
-              <p className="text-sm text-slate-600 line-clamp-2">{report.description}</p>
-              <p className="text-xs text-slate-500 mt-1">Posted by {report.user_name || "Anonymous"}</p>
-              <p className="text-xs text-slate-400 mt-2">{report.location_name}</p>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-      {selectedReport && (
-        <FlyToLocation position={[selectedReport.latitude, selectedReport.longitude]} />
-      )}
-    </MapContainer>
+            </Popup>
+          </Marker>
+        ))}
+        {selectedReport && (
+          <FlyToLocation position={[selectedReport.latitude, selectedReport.longitude]} />
+        )}
+        {userCenter && (
+          <Marker position={userCenter}>
+            <Popup>Your location</Popup>
+          </Marker>
+        )}
+        {userCenter && !selectedReport && (
+          <MapCenterUpdater center={userCenter} />
+        )}
+      </MapContainer>
+      <div className="absolute top-4 right-4 z-[1000] flex flex-col items-end gap-2 pointer-events-auto">
+        <button
+          type="button"
+          onClick={requestLocation}
+          className="rounded-full bg-white/90 px-4 py-2 text-xs font-medium text-slate-700 shadow border border-slate-200 hover:bg-white"
+          disabled={locating}
+        >
+          {locating ? "Locating..." : "Use my location"}
+        </button>
+        {locationError && (
+          <div className="rounded-md bg-white/90 px-3 py-1 text-xs text-red-600 shadow border border-red-100">
+            {locationError}
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
 export const LocationPicker = ({ onLocationSelect, selectedLocation, mapCenter }) => {
-  const defaultCenter = [27.7172, 85.3240]; // Kathmandu, Nepal
   const [position, setPosition] = useState(selectedLocation);
+  const [initialCenter, setInitialCenter] = useState(
+    selectedLocation
+      ? [selectedLocation.lat, selectedLocation.lng]
+      : mapCenter
+        ? [mapCenter.lat, mapCenter.lng]
+        : null
+  );
+  const [ready, setReady] = useState(Boolean(selectedLocation || mapCenter));
 
   const handleSelect = (pos) => {
     setPosition(pos);
+    setInitialCenter([pos.lat, pos.lng]);
+    setReady(true);
     onLocationSelect(pos);
   };
 
   useEffect(() => {
     if (selectedLocation) {
       setPosition(selectedLocation);
+      setInitialCenter([selectedLocation.lat, selectedLocation.lng]);
+      setReady(true);
       return;
     }
-    if (!navigator.geolocation) return;
+    if (mapCenter) {
+      setInitialCenter([mapCenter.lat, mapCenter.lng]);
+      setReady(true);
+      return;
+    }
+    if (!navigator.geolocation) {
+      setInitialCenter(defaultCenter);
+      setReady(true);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setPosition(current);
+        setInitialCenter([current.lat, current.lng]);
+        setReady(true);
         onLocationSelect(current);
       },
-      () => {},
+      () => {
+        setInitialCenter(DEFAULT_CENTER);
+        setReady(true);
+      },
       { enableHighAccuracy: true, timeout: 8000 }
     );
-  }, [selectedLocation, onLocationSelect]);
+  }, [selectedLocation, mapCenter, onLocationSelect]);
+
+  if (!ready || !initialCenter) {
+    return (
+      <div className="flex h-[300px] items-center justify-center rounded-xl bg-slate-100 text-sm text-slate-500">
+        Locating your current position...
+      </div>
+    );
+  }
 
   return (
     <MapContainer
-      center={defaultCenter}
+      center={initialCenter}
       zoom={13}
       className="w-full h-[300px] rounded-xl"
       scrollWheelZoom={false}
@@ -189,8 +280,7 @@ export const LocationPicker = ({ onLocationSelect, selectedLocation, mapCenter }
 };
 
 export const MapPreview = () => {
-  const defaultCenter = [27.7172, 85.3240]; // Kathmandu, Nepal
-  const [center, setCenter] = useState(defaultCenter);
+  const [center, setCenter] = useState(DEFAULT_CENTER);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
 

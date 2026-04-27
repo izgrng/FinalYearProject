@@ -6,33 +6,54 @@ import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { Checkbox } from "../components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Shield, Users, Calendar, Plus, Check, X, Loader2, FileText } from "lucide-react";
+import { Shield, Users, Calendar, Plus, Check, X, Loader2, FileText, Link2, ClipboardList, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+
+const reportStatuses = ["Needs Review", "Open", "Under Review", "In Progress", "Fixed"];
+const statusStyles = {
+  "Needs Review": "bg-amber-100 text-amber-800",
+  Open: "bg-sky-100 text-sky-800",
+  "Under Review": "bg-violet-100 text-violet-800",
+  "In Progress": "bg-indigo-100 text-indigo-800",
+  Fixed: "bg-emerald-100 text-emerald-800",
+};
+const urgencyStyles = {
+  high: "bg-rose-100 text-rose-800",
+  medium: "bg-orange-100 text-orange-800",
+  low: "bg-slate-100 text-slate-700",
+};
 
 const ModeratorPanel = () => {
   const { api } = useAuth();
   const [requests, setRequests] = useState([]);
   const [events, setEvents] = useState([]);
+  const [reports, setReports] = useState([]);
   const [pendingPosts, setPendingPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
+  const [reportStatusDrafts, setReportStatusDrafts] = useState({});
+  const [reportNotes, setReportNotes] = useState({});
   const [newEvent, setNewEvent] = useState({
-    title: "", description: "", event_date: "", location: "", max_participants: 20
+    title: "", description: "", event_date: "", location: "", max_participants: 20, related_report_ids: []
   });
 
   const fetchData = useCallback(async () => {
     try {
-      const [reqRes, eventsRes, postsRes] = await Promise.all([
+      const [reqRes, eventsRes, postsRes, reportsRes] = await Promise.all([
         api.get("/community/membership-requests"),
         api.get("/events"),
-        api.get("/community/posts/pending")
+        api.get("/community/posts/pending"),
+        api.get("/reports?limit=100")
       ]);
       setRequests(reqRes.data);
       setEvents(eventsRes.data);
       setPendingPosts(postsRes.data);
+      setReports(reportsRes.data || []);
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -79,11 +100,20 @@ const ModeratorPanel = () => {
       await api.post("/events", newEvent);
       toast.success("Event created!");
       setEventDialogOpen(false);
-      setNewEvent({ title: "", description: "", event_date: "", location: "", max_participants: 20 });
+      setNewEvent({ title: "", description: "", event_date: "", location: "", max_participants: 20, related_report_ids: [] });
       fetchData();
     } catch (error) {
       toast.error("Failed to create event");
     }
+  };
+
+  const toggleRelatedReport = (reportId, checked) => {
+    setNewEvent((prev) => ({
+      ...prev,
+      related_report_ids: checked
+        ? [...prev.related_report_ids, reportId]
+        : prev.related_report_ids.filter((id) => id !== reportId)
+    }));
   };
 
   const handleApprovePost = async (postId) => {
@@ -105,6 +135,32 @@ const ModeratorPanel = () => {
       toast.error("Failed to reject post");
     }
   };
+
+  const handleUpdateReportStatus = async (report) => {
+    const nextStatus = reportStatusDrafts[report.id] || report.status;
+    const note = reportNotes[report.id] || "";
+    setActionLoading(report.id);
+    try {
+      await api.post(`/reports/${report.id}/status`, { status: nextStatus, note });
+      toast.success("Report status updated");
+      setReportNotes((prev) => ({ ...prev, [report.id]: "" }));
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to update report");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const operationalReports = [...reports]
+    .filter((report) => report.status !== "Fixed")
+    .sort((a, b) => {
+      const urgencyRank = { high: 3, medium: 2, low: 1 };
+      return (
+        (urgencyRank[b.urgency] || 1) - (urgencyRank[a.urgency] || 1) ||
+        (a.ai_confidence ?? 1) - (b.ai_confidence ?? 1)
+      );
+    });
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -129,6 +185,10 @@ const ModeratorPanel = () => {
             <TabsTrigger value="events" className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
               Events
+            </TabsTrigger>
+            <TabsTrigger value="reports" className="flex items-center gap-2">
+              <ClipboardList className="w-4 h-4" />
+              Report Queue
             </TabsTrigger>
             <TabsTrigger value="posts" className="flex items-center gap-2">
               <FileText className="w-4 h-4" />
@@ -208,6 +268,27 @@ const ModeratorPanel = () => {
                         <Label>Max Participants</Label>
                         <Input type="number" value={newEvent.max_participants} onChange={(e) => setNewEvent({...newEvent, max_participants: parseInt(e.target.value)})} data-testid="event-max-input" />
                       </div>
+                      <div>
+                        <Label>Link Reports</Label>
+                        <div className="mt-2 max-h-44 space-y-2 overflow-y-auto rounded-xl border border-slate-200 p-3">
+                          {reports.length === 0 ? (
+                            <p className="text-sm text-slate-500">No reports available to link.</p>
+                          ) : (
+                            reports.slice(0, 12).map((report) => (
+                              <label key={report.id} className="flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-slate-50">
+                                <Checkbox
+                                  checked={newEvent.related_report_ids.includes(report.id)}
+                                  onCheckedChange={(checked) => toggleRelatedReport(report.id, checked === true)}
+                                />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-slate-900">{report.title}</p>
+                                  <p className="text-xs text-slate-500">{report.category} · {report.location_name}</p>
+                                </div>
+                              </label>
+                            ))
+                          )}
+                        </div>
+                      </div>
                       <Button onClick={handleCreateEvent} className="w-full bg-indigo-600 hover:bg-indigo-700" data-testid="submit-event-btn">Create Event</Button>
                     </div>
                   </DialogContent>
@@ -222,6 +303,20 @@ const ModeratorPanel = () => {
                           <div>
                             <h3 className="font-semibold text-slate-900">{event.title}</h3>
                             <p className="text-sm text-slate-600">{event.location}</p>
+                            {event.related_report_ids?.length > 0 && (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <Badge variant="secondary" className="bg-indigo-100 text-indigo-700">
+                                  <Link2 className="mr-1 h-3 w-3" />
+                                  {event.related_report_ids.length} linked report{event.related_report_ids.length > 1 ? "s" : ""}
+                                </Badge>
+                                {event.related_report_ids.slice(0, 2).map((reportId) => {
+                                  const report = reports.find((item) => item.id === reportId);
+                                  return report ? (
+                                    <span key={reportId} className="text-xs text-slate-500">{report.title}</span>
+                                  ) : null;
+                                })}
+                              </div>
+                            )}
                           </div>
                           <Badge>{event.participants?.length || 0}/{event.max_participants}</Badge>
                         </div>
@@ -230,6 +325,112 @@ const ModeratorPanel = () => {
                   </div>
                 ) : (
                   <p className="text-center text-slate-500 py-8">No events created yet</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="reports">
+            <Card className="border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle>Operational Report Queue</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {operationalReports.length === 0 ? (
+                  <p className="text-slate-600">No active reports to manage.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {operationalReports.slice(0, 16).map((report) => (
+                      <div key={report.id} className="rounded-xl border border-slate-200 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold text-slate-900">{report.title}</p>
+                              <Badge className={statusStyles[report.status] || "bg-slate-100 text-slate-700"}>
+                                {report.status}
+                              </Badge>
+                              {report.urgency && (
+                                <Badge className={urgencyStyles[report.urgency] || urgencyStyles.low}>
+                                  {report.urgency} urgency
+                                </Badge>
+                              )}
+                              {report.duplicate_of && (
+                                <Badge className="bg-amber-100 text-amber-800">Possible duplicate</Badge>
+                              )}
+                            </div>
+                            <p className="mt-1 text-sm text-slate-600">{report.category} • {report.location_name}</p>
+                            <p className="mt-2 text-sm text-slate-500 line-clamp-2">{report.description}</p>
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                              {typeof report.ai_confidence === "number" && (
+                                <span className="rounded-full bg-slate-100 px-2 py-1">
+                                  AI confidence {Math.round(report.ai_confidence * 100)}%
+                                </span>
+                              )}
+                              {report.ai_source && (
+                                <span className="rounded-full bg-slate-100 px-2 py-1">
+                                  Source {report.ai_source}
+                                </span>
+                              )}
+                              {report.urgency_reason && (
+                                <span className="rounded-full bg-slate-100 px-2 py-1">
+                                  {report.urgency_reason}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="w-full lg:w-[320px] space-y-3">
+                            <div>
+                              <Label>Update status</Label>
+                              <Select
+                                value={reportStatusDrafts[report.id] || report.status}
+                                onValueChange={(value) =>
+                                  setReportStatusDrafts((prev) => ({ ...prev, [report.id]: value }))
+                                }
+                              >
+                                <SelectTrigger className="mt-2">
+                                  <SelectValue placeholder="Select status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {reportStatuses.map((status) => (
+                                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Moderator note</Label>
+                              <Textarea
+                                value={reportNotes[report.id] || ""}
+                                onChange={(e) =>
+                                  setReportNotes((prev) => ({ ...prev, [report.id]: e.target.value }))
+                                }
+                                placeholder="Add a note for the timeline..."
+                                className="mt-2 min-h-[92px]"
+                              />
+                            </div>
+                            <Button
+                              onClick={() => handleUpdateReportStatus(report)}
+                              disabled={actionLoading === report.id}
+                              className="w-full"
+                            >
+                              {actionLoading === report.id ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Updating...
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="mr-2 h-4 w-4" />
+                                  Save Status Update
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

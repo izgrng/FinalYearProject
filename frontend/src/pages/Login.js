@@ -18,12 +18,37 @@ const Login = () => {
     password: ""
   });
 
+  const validateLogin = () => {
+    const email = formData.email.trim();
+    const password = formData.password;
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!email) {
+      toast.error("Email is required");
+      return false;
+    }
+    if (!emailPattern.test(email)) {
+      toast.error("Please enter a valid email address");
+      return false;
+    }
+    if (!password.trim()) {
+      toast.error("Password is required");
+      return false;
+    }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateLogin()) return;
     setLoading(true);
 
     try {
-      await login(formData.email, formData.password);
+      await login(formData.email.trim(), formData.password);
       toast.success("Welcome back!");
       navigate("/dashboard");
     } catch (error) {
@@ -69,6 +94,7 @@ const Login = () => {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="pl-10 h-12 rounded-xl"
+                    maxLength={120}
                     required
                     data-testid="login-email"
                   />
@@ -86,6 +112,8 @@ const Login = () => {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="pl-10 pr-10 h-12 rounded-xl"
+                    minLength={6}
+                    maxLength={128}
                     required
                     data-testid="login-password"
                   />

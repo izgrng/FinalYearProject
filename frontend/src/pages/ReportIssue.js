@@ -34,6 +34,9 @@ const ReportIssue = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [mapCenter, setMapCenter] = useState(null);
+  const canContinueDetails = Boolean(
+    formData.image_base64 || (formData.title.trim() && formData.description.trim())
+  );
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -161,7 +164,7 @@ const ReportIssue = () => {
       if (detail?.includes("rejected")) {
         toast.error(detail);
       } else {
-        toast.error("Failed to submit report");
+        toast.error(detail || "Failed to submit report");
       }
     } finally {
       setLoading(false);
@@ -203,31 +206,31 @@ const ReportIssue = () => {
                 <FileText className="w-5 h-5 text-indigo-600" />
                 Issue Details
               </CardTitle>
-              <CardDescription>Describe the problem you've observed</CardDescription>
+              <CardDescription>
+                Submit a full text report, or upload a photo and let Fixify help build the issue details.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="title">Title <span className="text-red-500">*</span></Label>
+                <Label htmlFor="title">Title {!formData.image_base64 && <span className="text-red-500">*</span>}</Label>
                 <Input
                   id="title"
                   placeholder="e.g., Large pothole on main road"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="h-12"
-                  required
                   data-testid="report-title-input"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description <span className="text-red-500">*</span></Label>
+                <Label htmlFor="description">Description {!formData.image_base64 && <span className="text-red-500">*</span>}</Label>
                 <Textarea
                   id="description"
                   placeholder="Provide details about the issue, its severity, and any other relevant information..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="min-h-[120px]"
-                  required
                   data-testid="report-description-input"
                 />
               </div>
@@ -279,13 +282,13 @@ const ReportIssue = () => {
                 </div>
                 <p className="text-xs text-slate-500 flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
-                  AI will verify the image shows a valid community issue
+                  AI will verify the image and can generate a usable report when you upload a photo
                 </p>
               </div>
 
               <Button 
                 onClick={() => setStep(2)}
-                disabled={!formData.title || !formData.description}
+                disabled={!canContinueDetails}
                 className="w-full h-12 bg-indigo-600 hover:bg-indigo-700"
                 data-testid="next-step-btn"
               >
@@ -421,16 +424,48 @@ const ReportIssue = () => {
                     <span className="text-slate-600">Category:</span>
                     <span className="font-medium text-indigo-600">{aiResult.category}</span>
                   </div>
+                  {typeof aiResult.ai_confidence === "number" && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-600">Confidence:</span>
+                      <span className="font-medium text-slate-900">
+                        {Math.round(aiResult.ai_confidence * 100)}%
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-slate-600">Status:</span>
                     <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium">
                       {aiResult.status}
                     </span>
                   </div>
+                  {aiResult.urgency && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-600">Urgency:</span>
+                      <span className="font-medium text-slate-900 capitalize">{aiResult.urgency}</span>
+                    </div>
+                  )}
+                  {aiResult.ai_reason && (
+                    <div className="pt-3 border-t border-slate-200">
+                      <span className="text-slate-600 text-sm">AI Reason: </span>
+                      <span className="text-slate-900 text-sm">{aiResult.ai_reason}</span>
+                    </div>
+                  )}
+                  {aiResult.urgency_reason && (
+                    <div className="pt-3 border-t border-slate-200">
+                      <span className="text-slate-600 text-sm">Urgency Note: </span>
+                      <span className="text-slate-900 text-sm">{aiResult.urgency_reason}</span>
+                    </div>
+                  )}
                   {aiResult.ai_analysis && (
                     <div className="pt-3 border-t border-slate-200">
-                      <span className="text-slate-600 text-sm">AI Detection: </span>
+                      <span className="text-slate-600 text-sm">Image Analysis: </span>
                       <span className="text-slate-900 text-sm">{aiResult.ai_analysis}</span>
+                    </div>
+                  )}
+                  {aiResult.ai_source && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-600">AI Source:</span>
+                      <span className="text-slate-500 text-sm">{aiResult.ai_source}</span>
                     </div>
                   )}
                 </div>

@@ -21,23 +21,56 @@ const Signup = () => {
     confirmPassword: ""
   });
 
+  const validateSignup = () => {
+    const fullName = formData.full_name.trim();
+    const email = formData.email.trim();
+    const password = formData.password;
+    const confirmPassword = formData.confirmPassword;
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (fullName.length < 2) {
+      toast.error("Full name must be at least 2 characters");
+      return false;
+    }
+    if (fullName.length > 80) {
+      toast.error("Full name is too long");
+      return false;
+    }
+    if (!email) {
+      toast.error("Email is required");
+      return false;
+    }
+    if (!emailPattern.test(email)) {
+      toast.error("Please enter a valid email address");
+      return false;
+    }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return false;
+    }
+    if (password.length > 128) {
+      toast.error("Password is too long");
+      return false;
+    }
+    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      toast.error("Password should include at least one letter and one number");
+      return false;
+    }
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (formData.password !== formData.confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
+    if (!validateSignup()) return;
 
     setLoading(true);
 
     try {
-      await register(formData.email, formData.password, formData.full_name);
+      await register(formData.email.trim(), formData.password, formData.full_name.trim());
       toast.success("Account created successfully!");
       navigate("/dashboard");
     } catch (error) {
@@ -82,6 +115,8 @@ const Signup = () => {
                     value={formData.full_name}
                     onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                     className="pl-10 h-12 rounded-xl"
+                    minLength={2}
+                    maxLength={80}
                     required
                     data-testid="signup-name"
                   />
@@ -99,6 +134,7 @@ const Signup = () => {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="pl-10 h-12 rounded-xl"
+                    maxLength={120}
                     required
                     data-testid="signup-email"
                   />
@@ -116,6 +152,8 @@ const Signup = () => {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="pl-10 pr-10 h-12 rounded-xl"
+                    minLength={6}
+                    maxLength={128}
                     required
                     data-testid="signup-password"
                   />
@@ -141,6 +179,8 @@ const Signup = () => {
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                     className="pl-10 pr-10 h-12 rounded-xl"
+                    minLength={6}
+                    maxLength={128}
                     required
                     data-testid="signup-confirm-password"
                   />
@@ -153,7 +193,7 @@ const Signup = () => {
                     {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">Use at least 6 characters.</p>
+                <p className="text-xs text-slate-500">Use at least 6 characters with one letter and one number.</p>
               </div>
 
               <Button

@@ -8,7 +8,7 @@ import { Badge } from "../components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { 
   Users, Calendar, MapPin, UserPlus, Clock, 
-  CheckCircle2, AlertCircle, Loader2, Heart, FileText
+  CheckCircle2, AlertCircle, Loader2, Heart, FileText, Link2, MessageSquare, ImagePlus, Send
 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
@@ -18,8 +18,13 @@ const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const CommunityHub = () => {
   const { user, api } = useAuth();
   const [events, setEvents] = useState([]);
+  const [reports, setReports] = useState([]);
   const [posts, setPosts] = useState([]);
   const [postForm, setPostForm] = useState({ title: "", content: "" });
+  const [commentDrafts, setCommentDrafts] = useState({});
+  const [commentLoading, setCommentLoading] = useState(null);
+  const [eventUpdateForms, setEventUpdateForms] = useState({});
+  const [eventUpdateLoading, setEventUpdateLoading] = useState(null);
   const [posting, setPosting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [membershipStatus, setMembershipStatus] = useState(null);
@@ -29,10 +34,14 @@ const CommunityHub = () => {
 
   const fetchEvents = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_URL}/events`);
-      setEvents(response.data);
-      const postsRes = await api.get("/community/posts");
+      const [eventsRes, postsRes, reportsRes] = await Promise.all([
+        axios.get(`${API_URL}/events`),
+        api.get("/community/posts"),
+        api.get("/reports?limit=100")
+      ]);
+      setEvents(eventsRes.data || []);
       setPosts(postsRes.data || []);
+      setReports(reportsRes.data || []);
     } catch (error) {
       console.error("Error fetching events:", error);
     } finally {
@@ -58,6 +67,97 @@ const CommunityHub = () => {
       toast.error("Failed to submit post");
     } finally {
       setPosting(false);
+    }
+  };
+
+  const fileToBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        resolve(result.split(",")[1]);
+      } else {
+        reject(new Error("Failed to read image"));
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const submitComment = async (postId) => {
+    const text = (commentDrafts[postId] || "").trim();
+    if (!text) {
+      toast.error("Please write a comment first");
+      return;
+    }
+    setCommentLoading(postId);
+    try {
+      const response = await api.post(`/community/posts/${postId}/comments`, { text });
+      setPosts((prev) => prev.map((post) => (
+        post.id === postId
+          ? { ...post, comments: [...(post.comments || []), response.data] }
+          : post
+      )));
+      setCommentDrafts((prev) => ({ ...prev, [postId]: "" }));
+      toast.success("Comment added");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to add comment");
+    } finally {
+      setCommentLoading(null);
+    }
+  };
+
+  const updateEventFormField = (eventId, field, value) => {
+    setEventUpdateForms((prev) => ({
+      ...prev,
+      [eventId]: {
+        text: "",
+        outcome: "",
+        image_base64: null,
+        ...prev[eventId],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleEventImageChange = async (eventId, file) => {
+    if (!file) return;
+    try {
+      const base64 = await fileToBase64(file);
+      updateEventFormField(eventId, "image_base64", base64);
+      toast.success("Event update image attached");
+    } catch (error) {
+      toast.error("Failed to read event image");
+    }
+  };
+
+  const submitEventUpdate = async (eventId) => {
+    const form = eventUpdateForms[eventId] || {};
+    if (!form.text?.trim()) {
+      toast.error("Please write an update first");
+      return;
+    }
+    setEventUpdateLoading(eventId);
+    try {
+      const response = await api.post(`/events/${eventId}/updates`, {
+        text: form.text.trim(),
+        outcome: form.outcome?.trim() || "",
+        image_base64: form.image_base64 || null
+      });
+      setEvents((prev) => prev.map((event) => (
+        event.id === eventId
+          ? { ...event, updates: [...(event.updates || []), response.data] }
+          : event
+      )));
+      setEventUpdateForms((prev) => ({
+        ...prev,
+        [eventId]: { text: "", outcome: "", image_base64: null }
+      }));
+      toast.success("Event update shared");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to share event update");
+    } finally {
+      setEventUpdateLoading(null);
     }
   };
 
@@ -216,6 +316,7 @@ const CommunityHub = () => {
             {events.map((event) => {
               const isJoined = user && event.participants?.includes(user.id);
               const isFull = event.participants?.length >= event.max_participants;
+              const canPostEventUpdate = user && (user.role === "moderator" || isJoined);
 
               return (
                 <Card key={event.id} className="border-0 shadow-sm hover:shadow-md transition-shadow" data-testid={`event-card-${event.id}`}>
@@ -242,6 +343,24 @@ const CommunityHub = () => {
                         <Users className="w-4 h-4 text-indigo-600" />
                         <span>{event.participants?.length || 0} / {event.max_participants} participants</span>
                       </div>
+                      {event.related_report_ids?.length > 0 && (
+                        <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+                          <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                            <Link2 className="w-4 h-4 text-indigo-600" />
+                            Linked Reports
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {event.related_report_ids.map((reportId) => {
+                              const report = reports.find((item) => item.id === reportId);
+                              return report ? (
+                                <Badge key={reportId} variant="secondary" className="bg-indigo-50 text-indigo-700">
+                                  {report.title}
+                                </Badge>
+                              ) : null;
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {user?.is_community_member && (
@@ -273,6 +392,79 @@ const CommunityHub = () => {
                       <p className="text-xs text-slate-500 text-center pt-3 border-t border-slate-100">
                         Become a community member to join events
                       </p>
+                    )}
+
+                    {(event.updates?.length > 0 || canPostEventUpdate) && (
+                      <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                        <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                          <MessageSquare className="w-4 h-4 text-indigo-600" />
+                          Event Updates
+                        </div>
+                        {event.updates?.length > 0 ? (
+                          <div className="space-y-3">
+                            {event.updates.map((update) => (
+                              <div key={update.id} className="rounded-xl bg-slate-50 p-3">
+                                <p className="text-sm text-slate-800">{update.text}</p>
+                                {update.outcome && (
+                                  <p className="mt-2 text-xs text-slate-600">
+                                    <span className="font-medium text-slate-700">Outcome:</span> {update.outcome}
+                                  </p>
+                                )}
+                                {update.image_url && (
+                                  <img
+                                    src={update.image_url}
+                                    alt="Event update"
+                                    className="mt-3 h-32 w-full rounded-xl object-cover"
+                                  />
+                                )}
+                                <p className="mt-2 text-[11px] text-slate-500">
+                                  Shared by {update.user_name}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-500">No updates shared yet.</p>
+                        )}
+
+                        {canPostEventUpdate && (
+                          <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+                            <Textarea
+                              placeholder="Share what happened during or after this event..."
+                              value={eventUpdateForms[event.id]?.text || ""}
+                              onChange={(e) => updateEventFormField(event.id, "text", e.target.value)}
+                              className="min-h-[90px]"
+                            />
+                            <Input
+                              placeholder="Outcome, result, or impact summary"
+                              value={eventUpdateForms[event.id]?.outcome || ""}
+                              onChange={(e) => updateEventFormField(event.id, "outcome", e.target.value)}
+                            />
+                            <div className="flex items-center gap-3">
+                              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+                                <ImagePlus className="w-4 h-4" />
+                                Add Photo
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => handleEventImageChange(event.id, e.target.files?.[0])}
+                                />
+                              </label>
+                              {eventUpdateForms[event.id]?.image_base64 && (
+                                <span className="text-xs text-green-600">Photo attached</span>
+                              )}
+                            </div>
+                            <Button
+                              className="w-full bg-indigo-600 hover:bg-indigo-700"
+                              onClick={() => submitEventUpdate(event.id)}
+                              disabled={eventUpdateLoading === event.id}
+                            >
+                              {eventUpdateLoading === event.id ? "Posting Update..." : "Share Update"}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </CardContent>
                 </Card>
@@ -327,6 +519,45 @@ const CommunityHub = () => {
                     <h4 className="font-semibold text-slate-900 mb-2">{post.title}</h4>
                     <p className="text-sm text-slate-600 mb-2">{post.content}</p>
                     <p className="text-xs text-slate-500">Posted by {post.user_name}</p>
+
+                    <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                        <MessageSquare className="w-4 h-4 text-indigo-600" />
+                        Discussion
+                      </div>
+                      {post.comments?.length > 0 ? (
+                        <div className="space-y-2">
+                          {post.comments.map((comment) => (
+                            <div key={comment.id} className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-sm text-slate-700">{comment.text}</p>
+                              <p className="mt-1 text-[11px] text-slate-500">By {comment.user_name}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500">No comments yet.</p>
+                      )}
+
+                      {user?.is_community_member && (
+                        <div className="space-y-2">
+                          <Textarea
+                            placeholder="Add a comment..."
+                            value={commentDrafts[post.id] || ""}
+                            onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [post.id]: e.target.value }))}
+                            className="min-h-[80px]"
+                          />
+                          <Button
+                            size="sm"
+                            className="bg-indigo-600 hover:bg-indigo-700"
+                            onClick={() => submitComment(post.id)}
+                            disabled={commentLoading === post.id}
+                          >
+                            <Send className="mr-2 h-4 w-4" />
+                            {commentLoading === post.id ? "Posting..." : "Comment"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               ))}

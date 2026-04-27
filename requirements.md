@@ -1,74 +1,73 @@
 # Fixify - Community Problem Reporting Platform
 
 ## Original Problem Statement
-Build "Fixify" - an AI-driven web platform for Nepal communities to report local problems like damaged roads, waste issues, water problems, and safety concerns. Features include:
-- AI triage system for automatic issue categorization
-- AI image validation (detect valid problems vs random photos)
-- Interactive map-based reporting and dashboard
-- Community Hub with moderator-approved membership
-- Fixi AI chatbot for user guidance
+Build "Fixify" - an AI-driven web platform for Nepal communities to report local problems like damaged roads, waste issues, water problems, and safety concerns.
 
 ## Architecture
-- **Frontend**: React with Tailwind CSS, Shadcn UI, Leaflet Maps
+- **Frontend**: React with Tailwind CSS, Radix UI, Leaflet Maps
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
-- **AI**: OpenAI GPT-4o via Emergent LLM key
+- **AI**: OpenRouter for chat and categorization, CLIP for image understanding, local ML fallback
 
 ## Completed Features
 
 ### Authentication
 - JWT-based login/signup
-- User roles (user, moderator)
+- User roles (`user`, `moderator`)
 - Protected routes
 
 ### Report System
-- Multi-step report form with image upload
-- AI-powered image validation (rejects selfies/irrelevant images)
-- AI triage categorization (Waste, Road, Water, Safety, Infrastructure, Environment)
-- Location picker with Leaflet maps
-- Upvote system
+- Multi-step report form with text and/or image submission
+- AI-powered image validation
+- AI triage categorization
+- Urgency prediction
+- Duplicate detection
+- Report comments and upvotes
+- Report timeline and moderator status workflow
 
 ### Dashboard
 - Interactive map with category-colored markers
-- Stats cards (total, open, resolved, hotspots)
-- Category pie chart
-- Filter by category, status, location
-- Latest reports list
+- Action-oriented stats cards
+- Attention queue and AI watchlist
+- Category, status, and location filters
+- Weekly flow and trend charts
 
 ### Community Hub
 - Membership request system
 - Moderator approval workflow
 - Community events with join/leave functionality
+- Linked reports, event updates, and post comments
 
 ### Fixi AI Chatbot
-- GPT-4o powered chatbot
-- Civic awareness and guidance
+- OpenRouter-powered chatbot
+- Civic guidance and platform help
 - Persistent chat sessions
 
 ### Moderator Panel
 - Approve/reject membership requests
 - Create community events
+- Review and update report status
 
 ## Database Collections
-- users, reports, events, membership_requests, chat_history
+- `users`
+- `reports`
+- `events`
+- `membership_requests`
+- `community_posts`
+- `notifications`
+- `chat_history`
 
 ## API Endpoints
 - `/api/auth/*` - Authentication
-- `/api/reports/*` - Issue reports CRUD
+- `/api/reports/*` - Issue reports CRUD and workflow
 - `/api/dashboard/stats` - Dashboard statistics
-- `/api/community/*` - Membership requests
+- `/api/community/*` - Membership requests and posts
 - `/api/events/*` - Community events
 - `/api/chat` - Fixi chatbot
 
 ## Next Action Items
 1. Add email notifications for membership approval
-2. Implement report status updates by moderators
-3. Add user comments on reports
-4. Implement report image gallery
-5. Add export functionality for reports (CSV/PDF)
-6. Implement push notifications for new reports in user's area
-7. Add Google Maps integration (when API key available)
-8. Implement report analytics and trends
-
-## Credentials
-- Moderator: moderator@fixify.com / Moderator123!
+2. Add before/after resolution proof for completed reports
+3. Add export functionality for reports (CSV/PDF)
+4. Improve deployment automation
+5. Expand report analytics and trends

@@ -1,15 +1,26 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ReportMap } from "../components/MapComponent";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { 
-  BarChart3, MapPin, AlertTriangle, CheckCircle2, 
-  TrendingUp, Search, Filter, Clock, ThumbsUp, MessageSquare
+import {
+  AlertTriangle,
+  BarChart3,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  Filter,
+  MapPin,
+  MessageSquare,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  ThumbsUp,
+  TrendingUp,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import axios from "axios";
@@ -24,8 +35,24 @@ const categoryColors = {
   "Public Safety": "#ef4444",
   "Environment": "#22c55e",
   "Public Facilities": "#8b5cf6",
-  "Other / Unclassified": "#64748b"
+  "Other / Unclassified": "#64748b",
 };
+
+const statusStyles = {
+  "Needs Review": "bg-amber-100 text-amber-800 border-amber-200",
+  Open: "bg-sky-100 text-sky-800 border-sky-200",
+  "Under Review": "bg-violet-100 text-violet-800 border-violet-200",
+  "In Progress": "bg-indigo-100 text-indigo-800 border-indigo-200",
+  Fixed: "bg-emerald-100 text-emerald-800 border-emerald-200",
+};
+
+const urgencyStyles = {
+  high: "bg-rose-100 text-rose-800 border-rose-200",
+  medium: "bg-orange-100 text-orange-800 border-orange-200",
+  low: "bg-slate-100 text-slate-700 border-slate-200",
+};
+
+const statusOrder = ["Needs Review", "Open", "Under Review", "In Progress", "Fixed"];
 
 const Dashboard = () => {
   const { user, api } = useAuth();
@@ -37,7 +64,7 @@ const Dashboard = () => {
   const [filters, setFilters] = useState({
     category: "",
     status: "",
-    location: ""
+    location: "",
   });
   const [selectedReport, setSelectedReport] = useState(null);
   const [commentsOpen, setCommentsOpen] = useState({});
@@ -56,9 +83,9 @@ const Dashboard = () => {
 
       const [reportsRes, statsRes] = await Promise.all([
         axios.get(`${API_URL}/reports?${params.toString()}`),
-        axios.get(`${API_URL}/dashboard/stats`)
+        axios.get(`${API_URL}/dashboard/stats`),
       ]);
-      
+
       setAllReports(reportsRes.data);
       setStats(statsRes.data);
     } catch (error) {
@@ -146,7 +173,7 @@ const Dashboard = () => {
       const res = await api.post(`/reports/${reportId}/comments`, { text });
       setCommentsByReport((prev) => ({
         ...prev,
-        [reportId]: [...(prev[reportId] || []), res.data]
+        [reportId]: [...(prev[reportId] || []), res.data],
       }));
       setCommentDrafts((prev) => ({ ...prev, [reportId]: "" }));
     } catch (error) {
@@ -161,21 +188,57 @@ const Dashboard = () => {
     }
   };
 
-  const chartData = stats?.categories ? 
-    Object.entries(stats.categories).map(([name, value]) => ({
-      name,
-      value,
-      fill: categoryColors[name] || categoryColors.Other
-    })) : [];
+  const chartData = stats?.categories
+    ? Object.entries(stats.categories).map(([name, value]) => ({
+        name,
+        value,
+        fill: categoryColors[name] || categoryColors["Other / Unclassified"],
+      }))
+    : [];
 
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
+  const statusChartData = useMemo(
+    () =>
+      statusOrder.map((status) => ({
+        status,
+        count: stats?.status_counts?.[status] || 0,
+      })),
+    [stats]
+  );
+
+  const trendData = stats?.trend?.map((item) => ({
+    ...item,
+    shortDate: new Date(item.date).toLocaleDateString("en-GB", { month: "short", day: "numeric" }),
+  })) || [];
+
+  const attentionReports = useMemo(() => {
+    if (stats?.review_queue?.length) return stats.review_queue;
+    return [...reports]
+      .filter((report) => report.status !== "Fixed")
+      .sort((a, b) => {
+        const urgencyRank = { high: 3, medium: 2, low: 1 };
+        return (
+          (urgencyRank[b.urgency] || 1) - (urgencyRank[a.urgency] || 1) ||
+          (a.ai_confidence ?? 1) - (b.ai_confidence ?? 1)
+        );
+      })
+      .slice(0, 6);
+  }, [reports, stats]);
+
+  const lowConfidenceReports = useMemo(
+    () =>
+      [...reports]
+        .filter((report) => typeof report.ai_confidence === "number" && report.ai_confidence < 0.6)
+        .slice(0, 4),
+    [reports]
+  );
+
+  const formatDate = (dateStr) =>
+    new Date(dateStr).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
-      minute: "2-digit"
+      minute: "2-digit",
     });
-  };
 
   if (loading) {
     return (
@@ -188,23 +251,35 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 font-[Manrope]" data-testid="dashboard-title">Dashboard</h1>
-          <p className="text-slate-600 mt-1">Real-time community issue tracking</p>
+        <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900" data-testid="dashboard-title">
+              Civic Response Dashboard
+            </h1>
+            <p className="mt-1 max-w-2xl text-slate-600">
+              Track what needs attention, where issue clusters are forming, and how community reports are moving toward resolution.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Current focus</p>
+            <p className="mt-1 text-sm text-slate-700">
+              {stats?.needs_review_reports || 0} reports need review, {stats?.duplicates_count || 0} possible duplicates,
+              and {stats?.resolved_this_week || 0} resolved this week.
+            </p>
+          </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-8">
           <Card className="border-0 shadow-sm">
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-                  <BarChart3 className="w-6 h-6 text-indigo-600" />
-                </div>
+              <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-slate-900">{stats?.total_reports || 0}</p>
-                  <p className="text-sm text-slate-500">Total Reports</p>
+                  <p className="text-sm text-slate-500">Needs Review</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{stats?.needs_review_reports || 0}</p>
+                  <p className="mt-1 text-xs text-slate-500">Possible duplicates and uncertain cases</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100">
+                  <ClipboardList className="h-6 w-6 text-amber-700" />
                 </div>
               </div>
             </CardContent>
@@ -212,13 +287,14 @@ const Dashboard = () => {
 
           <Card className="border-0 shadow-sm">
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                  <AlertTriangle className="w-6 h-6 text-orange-600" />
-                </div>
+              <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-slate-900">{stats?.open_reports || 0}</p>
-                  <p className="text-sm text-slate-500">Open Issues</p>
+                  <p className="text-sm text-slate-500">Active Issues</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{stats?.open_reports || 0}</p>
+                  <p className="mt-1 text-xs text-slate-500">Open, under review, or in progress</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-100">
+                  <AlertTriangle className="h-6 w-6 text-sky-700" />
                 </div>
               </div>
             </CardContent>
@@ -226,13 +302,14 @@ const Dashboard = () => {
 
           <Card className="border-0 shadow-sm">
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                  <CheckCircle2 className="w-6 h-6 text-green-600" />
-                </div>
+              <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-slate-900">{stats?.fixed_reports || 0}</p>
-                  <p className="text-sm text-slate-500">Resolved</p>
+                  <p className="text-sm text-slate-500">Possible Duplicates</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{stats?.duplicates_count || 0}</p>
+                  <p className="mt-1 text-xs text-slate-500">Reports that likely describe the same issue</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100">
+                  <Sparkles className="h-6 w-6 text-violet-700" />
                 </div>
               </div>
             </CardContent>
@@ -240,20 +317,20 @@ const Dashboard = () => {
 
           <Card className="border-0 shadow-sm">
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6 text-purple-600" />
-                </div>
+              <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-slate-900">{stats?.hotspots?.length || 0}</p>
-                  <p className="text-sm text-slate-500">Hotspots</p>
+                  <p className="text-sm text-slate-500">Resolved This Week</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{stats?.resolved_this_week || 0}</p>
+                  <p className="mt-1 text-xs text-slate-500">Visible movement, not just backlog</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100">
+                  <CheckCircle2 className="h-6 w-6 text-emerald-700" />
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Filters */}
         <Card className="border-0 shadow-sm mb-8 relative z-20">
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-4 items-center">
@@ -261,31 +338,32 @@ const Dashboard = () => {
                 <Filter className="w-4 h-4" />
                 <span className="text-sm font-medium">Filters:</span>
               </div>
-              
+
               <Select value={filters.category} onValueChange={(v) => setFilters({ ...filters, category: v })}>
-                <SelectTrigger className="w-[160px]" data-testid="filter-category">
+                <SelectTrigger className="w-[180px]" data-testid="filter-category">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent className="z-[1000]">
                   <SelectItem value="all">All Categories</SelectItem>
-                  {Object.keys(categoryColors).map(cat => (
+                  {Object.keys(categoryColors).map((cat) => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
               <Select value={filters.status} onValueChange={(v) => setFilters({ ...filters, status: v })}>
-                <SelectTrigger className="w-[140px]" data-testid="filter-status">
+                <SelectTrigger className="w-[180px]" data-testid="filter-status">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent className="z-[1000]">
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="Open">Open</SelectItem>
-                  <SelectItem value="Fixed">Fixed</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {statusOrder.map((status) => (
+                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
-              <div className="relative flex-1 min-w-[200px]">
+              <div className="relative flex-1 min-w-[220px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input
                   placeholder="Search by location..."
@@ -296,8 +374,8 @@ const Dashboard = () => {
                 />
               </div>
 
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setFilters({ category: "", status: "", location: "" })}
                 data-testid="filter-clear"
               >
@@ -305,219 +383,331 @@ const Dashboard = () => {
               </Button>
             </div>
             {nearbyOnly && !userCoords && (
-              <p className="mt-3 text-xs text-slate-500">
-                Enable location access to see nearby reports.
-              </p>
+              <p className="mt-3 text-xs text-slate-500">Enable location access to see nearby reports.</p>
             )}
           </CardContent>
         </Card>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Map */}
-          <div className="lg:col-span-2">
+        <div className="grid gap-8 xl:grid-cols-3">
+          <div className="xl:col-span-2 space-y-8">
             <Card className="border-0 shadow-sm overflow-hidden" ref={mapRef}>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <MapPin className="w-5 h-5 text-indigo-600" />
-                  Reports Map
+                  Live Report Map
                 </CardTitle>
+                <CardDescription>
+                  Explore where reports are clustering and jump straight into issue details.
+                </CardDescription>
               </CardHeader>
               <CardContent className="p-4">
-                <div className="h-[500px] rounded-xl overflow-hidden">
-                  <ReportMap 
-                    reports={reports} 
+                <div className="h-[420px] rounded-xl overflow-hidden">
+                  <ReportMap
+                    reports={reports}
                     onMarkerClick={setSelectedReport}
                     selectedReport={selectedReport}
                   />
                 </div>
               </CardContent>
             </Card>
+
+            <div className="grid gap-8 lg:grid-cols-2">
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-indigo-600" />
+                    Report Flow
+                  </CardTitle>
+                  <CardDescription>Where current issues sit in the response pipeline.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={statusChartData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="status" tick={{ fontSize: 12 }} interval={0} angle={-18} textAnchor="end" height={60} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#4f46e5" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-indigo-600" />
+                    Weekly Movement
+                  </CardTitle>
+                  <CardDescription>Submitted vs resolved reports over the last 7 days.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={trendData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="shortDate" tick={{ fontSize: 12 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Bar dataKey="submitted" fill="#0f172a" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="resolved" fill="#10b981" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-6">
-            {/* Category Chart */}
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">By Category</CardTitle>
+                <CardTitle className="text-lg">Attention Needed</CardTitle>
+                <CardDescription>Reports that deserve a first look from moderators or reviewers.</CardDescription>
               </CardHeader>
-              <CardContent>
-                {chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={chartData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={40}
-                        outerRadius={70}
-                        paddingAngle={2}
-                      >
-                        {chartData.map((entry, index) => (
-                          <Cell key={index} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+              <CardContent className="space-y-3">
+                {attentionReports.length > 0 ? (
+                  attentionReports.map((report) => (
+                    <button
+                      key={report.id}
+                      type="button"
+                      onClick={() => {
+                        const fullReport = reports.find((item) => item.id === report.id) || report;
+                        focusMap(fullReport);
+                      }}
+                      className="w-full rounded-xl border border-slate-200 p-3 text-left hover:border-indigo-200 hover:bg-slate-50"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={`border ${urgencyStyles[report.urgency || "low"]}`}>
+                          {report.urgency || "low"} urgency
+                        </Badge>
+                        <Badge className={`border ${statusStyles[report.status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+                          {report.status}
+                        </Badge>
+                        {report.duplicate_of && (
+                          <Badge className="border border-amber-200 bg-amber-100 text-amber-800">
+                            Possible duplicate
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-2 font-medium text-slate-900">{report.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">{report.category} • {report.location_name}</p>
+                    </button>
+                  ))
                 ) : (
-                  <p className="text-center text-slate-500 py-8">No data yet</p>
+                  <p className="py-4 text-sm text-slate-500">No reports currently need special attention.</p>
                 )}
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {chartData.map((item) => (
-                    <div key={item.name} className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded-full" style={{ background: item.fill }} />
-                      <span className="text-xs text-slate-600">{item.name}</span>
-                    </div>
-                  ))}
-                </div>
               </CardContent>
             </Card>
 
-            {/* Hotspots */}
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">AI Watchlist</CardTitle>
+                <CardDescription>Cases where the model was less confident and human review matters more.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {lowConfidenceReports.length > 0 ? (
+                  lowConfidenceReports.map((report) => (
+                    <Link
+                      key={report.id}
+                      to={`/reports/${report.id}`}
+                      className="block rounded-xl border border-slate-200 p-3 hover:border-indigo-200 hover:bg-slate-50"
+                    >
+                      <p className="font-medium text-slate-900">{report.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {Math.round((report.ai_confidence || 0) * 100)}% confidence • {report.ai_source || "AI"}
+                      </p>
+                    </Link>
+                  ))
+                ) : (
+                  <p className="py-4 text-sm text-slate-500">AI is confident on the current set of visible reports.</p>
+                )}
+              </CardContent>
+            </Card>
+
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">Top Hotspots</CardTitle>
+                <CardDescription>Locations generating the most issue reports right now.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {stats?.hotspots?.length > 0 ? (
+                  stats.hotspots.map((spot, idx) => (
+                    <div key={idx} className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100 text-sm font-semibold text-red-700">
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">{spot.location}</p>
+                          <p className="text-xs text-slate-500">Repeated issue area</p>
+                        </div>
+                      </div>
+                      <Badge variant="secondary">{spot.count} reports</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <p className="py-4 text-sm text-slate-500">Hotspots will appear once a few reports accumulate.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Issue Mix</CardTitle>
+                <CardDescription>Category distribution of the visible reports.</CardDescription>
               </CardHeader>
               <CardContent>
-                {stats?.hotspots?.length > 0 ? (
-                  <div className="space-y-3">
-                    {stats.hotspots.map((spot, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center text-red-600 font-bold text-sm">
-                            {idx + 1}
-                          </div>
-                          <span className="text-sm font-medium text-slate-700">{spot.location}</span>
+                {chartData.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={chartData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={78}
+                          paddingAngle={2}
+                        >
+                          {chartData.map((entry, index) => (
+                            <Cell key={index} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {chartData.map((item) => (
+                        <div key={item.name} className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded-full" style={{ background: item.fill }} />
+                          <span className="text-xs text-slate-600">{item.name}</span>
                         </div>
-                        <Badge variant="secondary">{spot.count} reports</Badge>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  </>
                 ) : (
-                  <p className="text-center text-slate-500 py-4">No hotspots yet</p>
+                  <p className="py-4 text-sm text-slate-500">No category data yet.</p>
                 )}
               </CardContent>
             </Card>
           </div>
         </div>
 
-        {/* Latest Reports */}
         <Card className="border-0 shadow-sm mt-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-indigo-600" />
-              Latest Reports
+              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+              Operational Queue
             </CardTitle>
+            <CardDescription>
+              These are the most relevant reports to inspect, validate, and move forward.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {reports.length > 0 ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {reports.slice(0, 6).map((report) => (
                   <div
                     key={report.id}
-                    className="p-4 bg-white border border-slate-200 rounded-xl hover:shadow-md transition-shadow"
+                    className="rounded-2xl border border-slate-200 bg-white p-4 transition-shadow hover:shadow-md"
                     data-testid={`report-card-${report.id}`}
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <Badge 
-                        style={{ background: categoryColors[report.category], color: "white" }}
-                        className="border-0"
-                      >
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      <Badge style={{ background: categoryColors[report.category], color: "white" }} className="border-0">
                         {report.category}
                       </Badge>
-                      <Badge variant={report.status === "Open" ? "outline" : "secondary"}>
+                      <Badge className={`border ${statusStyles[report.status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
                         {report.status}
                       </Badge>
+                      {report.urgency && (
+                        <Badge className={`border ${urgencyStyles[report.urgency] || urgencyStyles.low}`}>
+                          {report.urgency} urgency
+                        </Badge>
+                      )}
                     </div>
-                    <a
-                      href={`/reports/${report.id}`}
-                      className="font-semibold text-slate-900 mb-1 line-clamp-1 block hover:underline"
-                    >
+
+                    <Link to={`/reports/${report.id}`} className="block font-semibold text-slate-900 hover:underline">
                       {report.title}
-                    </a>
+                    </Link>
+
                     {report.image_base64 && (
                       <img
                         src={`data:image/jpeg;base64,${report.image_base64}`}
                         alt={report.title}
-                        className="mb-3 h-32 w-full rounded-lg object-cover"
+                        className="my-3 h-32 w-full rounded-lg object-cover"
                       />
                     )}
-                    <p className="text-sm text-slate-600 line-clamp-2 mb-3">{report.description}</p>
-                    <p className="text-xs text-slate-500 mb-2">
-                      Posted by{" "}
-                      {report.user_id ? (
-                        <a
-                          href={`/users/${report.user_id}`}
-                          className="text-slate-700 underline hover:text-slate-900"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {report.user_name || "Anonymous"}
-                        </a>
-                      ) : (
-                        report.user_name || "Anonymous"
+
+                    <p className="mb-3 text-sm text-slate-600 line-clamp-2">{report.description}</p>
+
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {report.ai_source && (
+                        <Badge variant="outline" className="text-[11px]">AI: {report.ai_source}</Badge>
                       )}
-                    </p>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      {typeof report.ai_confidence === "number" && (
+                        <Badge variant="outline" className="text-[11px]">
+                          {Math.round(report.ai_confidence * 100)}% confidence
+                        </Badge>
+                      )}
+                      {report.duplicate_of && (
+                        <Badge className="bg-amber-100 text-amber-800 text-[11px]">Possible duplicate</Badge>
+                      )}
+                    </div>
+
+                    <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
                       <div className="flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
                         <span className="line-clamp-1">{report.location_name}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <ThumbsUp className="w-3 h-3" />
-                        <span>{report.upvotes || 0}</span>
+                        <Clock className="w-3 h-3" />
+                        <span>{formatDate(report.created_at)}</span>
                       </div>
                     </div>
-                    <div className="mt-3 flex items-center gap-3">
+
+                    {report.urgency_reason && (
+                      <p className="mb-3 text-xs text-slate-500">
+                        <span className="font-medium text-slate-700">Urgency note:</span> {report.urgency_reason}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-3 text-xs text-slate-600">
                       <button
                         type="button"
-                        className="text-xs text-slate-600 hover:text-slate-900 flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          focusMap(report);
-                        }}
+                        className="flex items-center gap-1 hover:text-slate-900"
+                        onClick={() => focusMap(report)}
                       >
                         <MapPin className="w-3 h-3" />
-                        View on Map
+                        View on map
                       </button>
                       <button
                         type="button"
-                        className="text-xs text-slate-600 hover:text-slate-900 flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleLike(report.id);
-                        }}
+                        className="flex items-center gap-1 hover:text-slate-900"
+                        onClick={() => handleLike(report.id)}
                       >
                         <ThumbsUp className="w-3 h-3" />
-                        Like
+                        {report.upvotes || 0}
                       </button>
                       <button
                         type="button"
-                        className="text-xs text-slate-600 hover:text-slate-900 flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleComments(report.id);
-                        }}
+                        className="flex items-center gap-1 hover:text-slate-900"
+                        onClick={() => toggleComments(report.id)}
                       >
                         <MessageSquare className="w-3 h-3" />
                         Comments
                       </button>
                     </div>
+
                     {commentsOpen[report.id] && (
                       <div className="mt-3 border-t border-slate-200 pt-3">
                         <div className="space-y-2">
                           {(commentsByReport[report.id] || []).map((comment) => (
                             <div key={comment.id} className="text-xs text-slate-700">
                               {comment.user_id ? (
-                                <a
-                                  href={`/users/${comment.user_id}`}
-                                  className="font-medium underline hover:text-slate-900"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
+                                <Link to={`/users/${comment.user_id}`} className="font-medium underline hover:text-slate-900">
                                   {comment.user_name}
-                                </a>
+                                </Link>
                               ) : (
                                 <span className="font-medium">{comment.user_name}</span>
                               )}
@@ -538,22 +728,14 @@ const Dashboard = () => {
                               }
                               placeholder="Write a comment..."
                               className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs"
-                              onClick={(e) => e.stopPropagation()}
                             />
-                            <Button
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                submitComment(report.id);
-                              }}
-                            >
+                            <Button size="sm" onClick={() => submitComment(report.id)}>
                               Post
                             </Button>
                           </div>
                         )}
                       </div>
                     )}
-                    <p className="text-xs text-slate-400 mt-2">{formatDate(report.created_at)}</p>
                   </div>
                 ))}
               </div>
@@ -561,7 +743,7 @@ const Dashboard = () => {
               <div className="text-center py-12">
                 <AlertTriangle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-500">No reports found</p>
-                <p className="text-sm text-slate-400 mt-1">Be the first to report an issue!</p>
+                <p className="text-sm text-slate-400 mt-1">Once reports come in, this queue will become your action board.</p>
               </div>
             )}
           </CardContent>

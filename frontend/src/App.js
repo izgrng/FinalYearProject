@@ -3,7 +3,6 @@ import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 import FixiChatbot from "./components/FixiChatbot";
-import CookieBanner from "./components/CookieBanner";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -49,7 +48,6 @@ function AppContent() {
         <Route path="/moderator" element={<ModeratorRoute><ModeratorPanel /></ModeratorRoute>} />
       </Routes>
       {user && <FixiChatbot />}
-      <CookieBanner />
       <Toaster position="top-right" />
     </div>
   );

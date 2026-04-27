@@ -1,47 +1,70 @@
 # Fixify
 
-An AI‑powered civic issue reporting platform for Nepal.
+An AI-powered civic issue reporting platform for Nepal.
 
 **Stack**
 - Frontend: React (CRA + CRACO), Tailwind, Radix UI
 - Backend: FastAPI (Python), MongoDB
-- AI: Optional (rule-based fallback enabled by default)
-- Maps: Google Maps JavaScript API
+- AI: OpenRouter, CLIP, and local ML fallback
+- Maps: Leaflet / OpenStreetMap
 - Infra: Docker + Docker Compose
 
-## Setup (Local)
-1. Create your backend env file at `backend/.env`:
-```
+## Local Setup
+
+1. Copy `backend/.env.example` to `backend/.env` and fill in your secrets:
+
+```env
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=fixify
 JWT_SECRET=replace-me
 CORS_ORIGINS=http://localhost:3000
+OPENROUTER_API_KEY=replace-me
 ```
 
-2. Create your frontend env file at `frontend/.env`:
-```
+2. Copy `frontend/.env.example` to `frontend/.env`:
+
+```env
 REACT_APP_BACKEND_URL=http://localhost:5000
-REACT_APP_GOOGLE_MAPS_API_KEY=replace-me
 ```
 
 3. Start the app with Docker:
-```
-docker-compose up --build
+
+```bash
+docker compose up --build
 ```
 
 Frontend runs at `http://localhost:3000` and backend at `http://localhost:5000`.
 
-## Setup (Without Docker)
+## Local Setup Without Docker
+
 Backend:
-```
+
+```bash
 cd backend
 pip install -r requirements.txt
 uvicorn server:app --host 0.0.0.0 --port 5000
 ```
 
 Frontend:
-```
+
+```bash
 cd frontend
-yarn
-yarn start
+npm install
+npm start
 ```
+
+## Deployment
+
+Recommended production setup:
+
+- Frontend: Vercel
+- Backend: Render
+- Database: MongoDB Atlas
+
+Set the frontend environment variable on Vercel:
+
+```env
+REACT_APP_BACKEND_URL=https://your-backend-url
+```
+
+Set backend environment variables on your host platform instead of committing `.env` files.

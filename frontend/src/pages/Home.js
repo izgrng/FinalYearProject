@@ -1,14 +1,16 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
 import { MapPreview } from "../components/MapComponent";
 import { 
-  MapPin, Camera, AlertTriangle, CheckCircle2, Users, Bot, 
+  MapPin, Camera, AlertTriangle, Users, Bot, 
   ArrowRight, Shield, Zap, BarChart3, Globe
 } from "lucide-react";
 
 const Home = () => {
   const { user } = useAuth();
+  const location = useLocation();
 
   const features = [
     {
@@ -50,8 +52,37 @@ const Home = () => {
     { value: "95%", label: "AI Accuracy" }
   ];
 
+  const bannerItems = [
+    "Road & Transport",
+    "Waste & Sanitation",
+    "Water & Drainage",
+    "Public Safety",
+    "Community Action",
+    "AI Triage"
+  ];
+
+  const howItWorksItems = [
+    "Capture",
+    "Verify",
+    "Categorize",
+    "Map",
+    "Track",
+    "Resolve"
+  ];
+
+  useEffect(() => {
+    if (location.hash === "#how-it-works") {
+      const section = document.getElementById("how-it-works");
+      if (section) {
+        window.setTimeout(() => {
+          section.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 50);
+      }
+    }
+  }, [location]);
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background transition-colors dark:bg-slate-950">
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 hero-gradient opacity-95" />
@@ -63,7 +94,22 @@ const Home = () => {
             backgroundPosition: "center"
           }}
         />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32">
+        <div className="relative motion-banner-shell">
+          <div className="hidden sm:flex absolute left-5 top-1/2 z-10 -translate-y-1/2 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-200 backdrop-blur-md">
+            Live Community Signals
+          </div>
+          <div className="motion-banner py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-white/80">
+            <div className="motion-banner-track">
+              {[...bannerItems, ...bannerItems].map((item, index) => (
+                <span key={`${item}-${index}`} className="inline-flex items-center gap-3 px-7">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-300/90" />
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur rounded-full text-white/90 text-sm mb-6">
@@ -71,7 +117,7 @@ const Home = () => {
                 Empowering Nepal's Communities
               </div>
               
-              <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 font-[Manrope] tracking-tight">
+              <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 font-[Manrope] tracking-tight">
                 <span className="block">See it.</span>
                 <span className="block">Say it.</span>
                 <span className="block text-cyan-300">Report it.</span>
@@ -115,17 +161,6 @@ const Home = () => {
                   alt="Nepal Street Scene"
                   className="relative rounded-3xl shadow-2xl shadow-black/30 w-full"
                 />
-                <div className="absolute -bottom-6 -left-6 bg-white rounded-2xl p-4 shadow-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                      <CheckCircle2 className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">AI Verified</p>
-                      <p className="text-xs text-slate-500">Report submitted</p>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -143,13 +178,13 @@ const Home = () => {
       </section>
 
       {/* Stats Section */}
-      <section className="py-16 bg-background">
+      <section className="py-16 bg-[#F4FBF9] transition-colors dark:bg-slate-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, idx) => (
-              <div key={idx} className="text-center">
+              <div key={idx} className="text-center rounded-2xl border border-[#D7ECE7] bg-white/80 p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/80 dark:hover:shadow-teal-500/10">
                 <p className="text-4xl md:text-5xl font-bold gradient-text mb-2">{stat.value}</p>
-                <p className="text-slate-600">{stat.label}</p>
+                <p className="text-slate-600 dark:text-slate-300">{stat.label}</p>
               </div>
             ))}
           </div>
@@ -157,13 +192,23 @@ const Home = () => {
       </section>
 
       {/* Features Section */}
-      <section id="how-it-works" className="py-20 bg-slate-50">
+      <section id="how-it-works" className="py-20 bg-white transition-colors dark:bg-slate-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 font-[Manrope]">
+            <div className="how-it-works-ribbon mx-auto mb-6 max-w-3xl">
+              <div className="how-it-works-track">
+                {[...howItWorksItems, ...howItWorksItems].map((item, idx) => (
+                  <span key={`${item}-${idx}`} className="inline-flex items-center gap-3 px-6">
+                    <span className="h-1.5 w-1.5 rounded-full bg-cyan-400/80" />
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 font-[Manrope] dark:text-white">
               How Fixify Works
             </h2>
-            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+            <p className="text-lg text-slate-600 max-w-2xl mx-auto dark:text-slate-300">
               Our AI-powered platform makes reporting community issues simple, fast, and effective.
             </p>
           </div>
@@ -172,13 +217,13 @@ const Home = () => {
             {features.map((feature, idx) => (
               <div 
                 key={idx}
-                className="bg-white rounded-2xl p-8 border border-slate-100 hover:border-[#C9A227]/40 hover:shadow-lg hover:shadow-[#0B1F3B]/10 transition-all group card-hover"
+                className="bg-[#F4FBF9] rounded-2xl p-8 border border-[#D7ECE7] hover:border-teal-500/40 hover:shadow-lg hover:shadow-slate-900/10 transition-all group card-hover dark:bg-slate-950 dark:border-slate-800 dark:hover:border-teal-500/50 dark:hover:shadow-teal-500/10"
               >
-                <div className="w-14 h-14 bg-[#0B1F3B]/10 rounded-xl flex items-center justify-center text-[#0B1F3B] mb-6 group-hover:bg-[#0B1F3B] group-hover:text-white transition-colors">
+                <div className="w-14 h-14 bg-teal-100 rounded-xl flex items-center justify-center text-teal-700 mb-6 group-hover:bg-teal-700 group-hover:text-white transition-colors">
                   {feature.icon}
                 </div>
-                <h3 className="text-xl font-semibold text-slate-900 mb-3">{feature.title}</h3>
-                <p className="text-slate-600 leading-relaxed">{feature.description}</p>
+                <h3 className="text-xl font-semibold text-slate-900 mb-3 dark:text-white">{feature.title}</h3>
+                <p className="text-slate-600 leading-relaxed dark:text-slate-300">{feature.description}</p>
               </div>
             ))}
           </div>
@@ -186,55 +231,55 @@ const Home = () => {
       </section>
 
       {/* Visual Highlights */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-[#F4FBF9] transition-colors dark:bg-slate-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 font-[Manrope]">
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 font-[Manrope] dark:text-white">
               Community In Focus
             </h2>
-            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+            <p className="text-lg text-slate-600 max-w-2xl mx-auto dark:text-slate-300">
               A quick glimpse of local challenges and the people who care about solving them.
             </p>
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
-            <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+            <div className="group relative overflow-hidden rounded-2xl border border-[#D7ECE7] bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
               <img
                 src="/images/img1.jpg"
                 alt="Community issue"
                 className="h-56 w-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
               <div className="p-4">
-                <h3 className="text-lg font-semibold text-slate-900">Local Issues</h3>
-                <p className="text-sm text-slate-600">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Local Issues</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
                   Real problems captured and reported by citizens.
                 </p>
               </div>
             </div>
 
-            <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+            <div className="group relative overflow-hidden rounded-2xl border border-[#D7ECE7] bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
               <img
                 src="/images/UID.png"
                 alt="User identity"
                 className="h-56 w-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
               <div className="p-4">
-                <h3 className="text-lg font-semibold text-slate-900">Trusted Voices</h3>
-                <p className="text-sm text-slate-600">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Trusted Voices</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
                   Verified participation builds stronger communities.
                 </p>
               </div>
             </div>
 
-            <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+            <div className="group relative overflow-hidden rounded-2xl border border-[#D7ECE7] bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
               <img
                 src="/images/WIP.jpeg"
                 alt="Community progress"
                 className="h-56 w-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
               <div className="p-4">
-                <h3 className="text-lg font-semibold text-slate-900">Work In Progress</h3>
-                <p className="text-sm text-slate-600">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Work In Progress</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
                   Track progress and celebrate improvements together.
                 </p>
               </div>
@@ -244,17 +289,17 @@ const Home = () => {
       </section>
 
       {/* Map Preview Section */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-white transition-colors dark:bg-slate-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 font-[Manrope]">
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 font-[Manrope] dark:text-white">
               Explore Community Reports
             </h2>
-            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+            <p className="text-lg text-slate-600 max-w-2xl mx-auto dark:text-slate-300">
               See where issues are being reported across the city.
             </p>
           </div>
-          <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+          <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm dark:border-slate-800">
             <div className="h-[420px]">
               <MapPreview />
             </div>
@@ -263,9 +308,10 @@ const Home = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-br from-slate-900 to-slate-800">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#C9A227]/20 rounded-full text-[#C9A227] text-sm mb-6">
+      <section className="py-20 bg-[#073B3A] relative overflow-hidden">
+        <div className="absolute inset-0 civic-grid opacity-25" />
+        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-teal-300/15 rounded-full text-teal-100 text-sm mb-6 border border-teal-200/20">
             <Shield className="w-4 h-4" />
             Make Your Voice Heard
           </div>
@@ -278,14 +324,14 @@ const Home = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             {user ? (
               <Link to="/report">
-                <Button size="lg" className="bg-[#0B1F3B] hover:bg-[#0B1F3B]/90 text-white rounded-full px-8 h-12" data-testid="cta-report-btn">
+                <Button size="lg" className="bg-[#0F766E] hover:bg-[#115E59] text-white rounded-full px-8 h-12 font-semibold" data-testid="cta-report-btn">
                   Report Now
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
             ) : (
               <Link to="/signup">
-                <Button size="lg" className="bg-[#0B1F3B] hover:bg-[#0B1F3B]/90 text-white rounded-full px-8 h-12" data-testid="cta-signup-btn">
+                <Button size="lg" className="bg-[#0F766E] hover:bg-[#115E59] text-white rounded-full px-8 h-12 font-semibold" data-testid="cta-signup-btn">
                   Create Free Account
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>

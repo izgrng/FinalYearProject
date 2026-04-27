@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from "./ui/dropdown-menu";
-import { Menu, User, LogOut, LayoutDashboard, Users, Shield, Bell, Share2 } from "lucide-react";
+import { Menu, User, LogOut, LayoutDashboard, Shield, Bell, Share2, Sun, Moon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -18,6 +18,16 @@ const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("fixify-theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const shouldUseDark = savedTheme ? savedTheme === "dark" : prefersDark;
+
+    document.documentElement.classList.toggle("dark", shouldUseDark);
+    setIsDarkMode(shouldUseDark);
+  }, []);
 
   useEffect(() => {
     const loadNotifications = async () => {
@@ -39,34 +49,43 @@ const Navbar = () => {
     navigate("/");
   };
 
+  const toggleTheme = () => {
+    const nextIsDark = !isDarkMode;
+    document.documentElement.classList.toggle("dark", nextIsDark);
+    localStorage.setItem("fixify-theme", nextIsDark ? "dark" : "light");
+    setIsDarkMode(nextIsDark);
+  };
+
   return (
-    <nav className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-slate-200/70 shadow-sm">
+    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200/70 shadow-sm transition-colors dark:bg-slate-950/85 dark:border-slate-800">
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-18 min-h-[72px]">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group" data-testid="nav-logo">
+          <Link to="/" className="flex items-center gap-3 group" data-testid="nav-logo">
             <img
               src="/images/Logo.png"
               alt="Fixify logo"
-              className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/40 transition-shadow"
+              className="w-12 h-12 rounded-2xl object-cover shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/40 transition-shadow"
             />
-            <span className="text-xl font-bold font-[Manrope] text-slate-900">Fixify</span>
+            <span className="text-[1.9rem] font-semibold tracking-tight text-slate-900 dark:text-white">
+              Fixify
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-1">
             <Link to="/dashboard">
-              <Button variant="ghost" className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full text-base" data-testid="nav-dashboard">
+              <Button variant="ghost" className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full text-base dark:text-slate-200 dark:hover:text-white dark:hover:bg-slate-800" data-testid="nav-dashboard">
                 Dashboard
               </Button>
             </Link>
             <Link to="/#how-it-works">
-              <Button variant="ghost" className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full text-base" data-testid="nav-how-it-works">
+              <Button variant="ghost" className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full text-base dark:text-slate-200 dark:hover:text-white dark:hover:bg-slate-800" data-testid="nav-how-it-works">
                 How it works
               </Button>
             </Link>
             <Link to="/community">
-              <Button variant="ghost" className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full text-base" data-testid="nav-community">
+              <Button variant="ghost" className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full text-base dark:text-slate-200 dark:hover:text-white dark:hover:bg-slate-800" data-testid="nav-community">
                 Community Hub
               </Button>
             </Link>
@@ -84,7 +103,22 @@ const Navbar = () => {
             <Button
               variant="ghost"
               size="icon"
-              className="rounded-full hover:bg-slate-100"
+              className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+              onClick={toggleTheme}
+              aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+              title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+              data-testid="nav-theme-toggle"
+            >
+              {isDarkMode ? (
+                <Sun className="h-5 w-5 text-cyan-300" />
+              ) : (
+                <Moon className="h-5 w-5 text-slate-700" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
               onClick={async () => {
                 const shareUrl = window.location.origin;
                 if (navigator.share) {
@@ -104,7 +138,7 @@ const Navbar = () => {
               }}
               data-testid="nav-share"
             >
-              <Share2 className="h-5 w-5 text-slate-700" />
+              <Share2 className="h-5 w-5 text-slate-700 dark:text-slate-200" />
             </Button>
             <DropdownMenu
               onOpenChange={async (open) => {
@@ -119,9 +153,9 @@ const Navbar = () => {
               }}
             >
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-100" data-testid="nav-notifications">
+                <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800" data-testid="nav-notifications">
                   <div className="relative">
-                    <Bell className="h-5 w-5 text-slate-700" />
+                    <Bell className="h-5 w-5 text-slate-700 dark:text-slate-200" />
                     {unreadCount > 0 && (
                       <span className="absolute -top-2 -right-2 h-4 min-w-[16px] rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
                         {unreadCount}
@@ -157,11 +191,11 @@ const Navbar = () => {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2 rounded-full hover:bg-slate-100" data-testid="nav-user-menu">
+                  <Button variant="ghost" className="flex items-center gap-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800" data-testid="nav-user-menu">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
                       {user.full_name?.charAt(0).toUpperCase()}
                     </div>
-                    <span className="hidden sm:block text-slate-700 font-medium">{user.full_name}</span>
+                    <span className="hidden sm:block text-slate-700 font-medium dark:text-slate-200">{user.full_name}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -193,12 +227,12 @@ const Navbar = () => {
             ) : (
               <div className="flex items-center gap-2">
                 <Link to="/login">
-                  <Button variant="ghost" className="text-slate-700 hover:text-slate-900 rounded-full text-base" data-testid="nav-login">
+                  <Button variant="ghost" className="text-slate-700 hover:text-slate-900 rounded-full text-base dark:text-slate-200 dark:hover:text-white" data-testid="nav-login">
                     Login
                   </Button>
                 </Link>
                 <Link to="/signup">
-                  <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full text-base" data-testid="nav-signup">
+                  <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full text-base shadow-sm shadow-indigo-500/25" data-testid="nav-signup">
                     Sign Up
                   </Button>
                 </Link>
@@ -209,7 +243,7 @@ const Navbar = () => {
             <Button 
               variant="ghost" 
               size="icon" 
-              className="md:hidden"
+              className="md:hidden dark:text-slate-200"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               data-testid="nav-mobile-menu"
             >
@@ -220,7 +254,7 @@ const Navbar = () => {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-slate-200">
+          <div className="md:hidden py-4 border-t border-slate-200 dark:border-slate-800">
             <div className="flex flex-col gap-2">
               <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
                 <Button variant="ghost" className="w-full justify-start">Dashboard</Button>
@@ -230,7 +264,7 @@ const Navbar = () => {
               </Link>
               {user && (
                 <Link to="/report" onClick={() => setMobileMenuOpen(false)}>
-                  <Button className="w-full bg-indigo-600 hover:bg-indigo-700">Report Issue</Button>
+                  <Button className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700">Report Issue</Button>
                 </Link>
               )}
             </div>
