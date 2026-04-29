@@ -206,6 +206,11 @@ const Dashboard = () => {
     [reports]
   );
 
+  const topCategory = useMemo(() => {
+    if (!stats?.categories?.length) return null;
+    return [...stats.categories].sort((a, b) => b.count - a.count)[0];
+  }, [stats]);
+
   const summaryCards = [
     {
       label: "Total Reports",
@@ -318,6 +323,42 @@ const Dashboard = () => {
                     <p className="mt-2 text-xs leading-5 text-slate-500">{lane.helper}</p>
                   </div>
                 ))}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-sm dark:border-[#d7e5e3] dark:bg-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg text-slate-900">Top category</CardTitle>
+                <CardDescription>
+                  The issue type appearing most often in the current dashboard data.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {topCategory ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{topCategory._id}</p>
+                        <p className="mt-2 text-xs leading-5 text-slate-500">
+                          This category currently has the highest number of submitted reports.
+                        </p>
+                      </div>
+                      <Badge
+                        className="border-0"
+                        style={{
+                          background: categoryColors[topCategory._id] || "#64748b",
+                          color: "white",
+                        }}
+                      >
+                        {topCategory.count}
+                      </Badge>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    Category trends will appear here once report data is available.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
