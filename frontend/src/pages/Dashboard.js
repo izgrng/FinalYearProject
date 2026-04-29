@@ -207,9 +207,19 @@ const Dashboard = () => {
   );
 
   const topCategory = useMemo(() => {
-    if (!stats?.categories?.length) return null;
-    return [...stats.categories].sort((a, b) => b.count - a.count)[0];
+    const entries = Object.entries(stats?.categories || {});
+    if (!entries.length) return null;
+    const [name, count] = entries.sort((a, b) => b[1] - a[1])[0];
+    return { name, count };
   }, [stats]);
+
+  const categoryBreakdown = useMemo(
+    () =>
+      Object.entries(stats?.categories || {})
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count),
+    [stats]
+  );
 
   const summaryCards = [
     {
@@ -246,6 +256,13 @@ const Dashboard = () => {
       note: "May describe the same issue",
       icon: <Sparkles className="h-5 w-5 text-violet-600" />,
       shell: "bg-violet-50",
+    },
+    {
+      label: topCategory?.name || "Top Category",
+      value: topCategory?.count || 0,
+      note: topCategory ? "Highest number of submitted reports" : "Category trend appears once data loads",
+      icon: <ClipboardList className="h-5 w-5 text-cyan-600" />,
+      shell: "bg-cyan-50",
     },
   ];
 
@@ -338,7 +355,7 @@ const Dashboard = () => {
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium text-slate-900">{topCategory._id}</p>
+                        <p className="text-sm font-medium text-slate-900">{topCategory.name}</p>
                         <p className="mt-2 text-xs leading-5 text-slate-500">
                           This category currently has the highest number of submitted reports.
                         </p>
@@ -346,7 +363,7 @@ const Dashboard = () => {
                       <Badge
                         className="border-0"
                         style={{
-                          background: categoryColors[topCategory._id] || "#64748b",
+                          background: categoryColors[topCategory.name] || "#64748b",
                           color: "white",
                         }}
                       >
@@ -387,6 +404,55 @@ const Dashboard = () => {
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500">Pick a report from the table or a map marker to focus it here.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-sm dark:border-[#d7e5e3] dark:bg-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg text-slate-900">Category breakdown</CardTitle>
+                <CardDescription>
+                  Compare how many issues are currently sitting in each report category.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {categoryBreakdown.length ? (
+                  categoryBreakdown.map((category, index) => (
+                    <div
+                      key={category.name}
+                      className={`rounded-2xl border p-3 ${
+                        index === 0 ? "border-cyan-200 bg-cyan-50" : "border-slate-200 bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="h-3 w-3 rounded-full"
+                            style={{ background: categoryColors[category.name] || "#64748b" }}
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{category.name}</p>
+                            <p className="text-xs text-slate-500">
+                              {index === 0 ? "Current highest report count" : "Visible in dashboard data"}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge
+                          className="border-0"
+                          style={{
+                            background: categoryColors[category.name] || "#64748b",
+                            color: "white",
+                          }}
+                        >
+                          {category.count}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    Category totals will appear here once report data is available.
+                  </p>
                 )}
               </CardContent>
             </Card>
