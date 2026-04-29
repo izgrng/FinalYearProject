@@ -7,6 +7,12 @@ import { X, Send, User, Mic, Square } from "lucide-react";
 import { toast } from "sonner";
 import { useLanguage } from "../context/LanguageContext";
 
+const defaultSuggestions = [
+  "How do I report an issue?",
+  "Give me a civic awareness tip",
+  "What can I do in the community hub?",
+];
+
 const FixiChatbot = () => {
   const { api } = useAuth();
   const { t } = useLanguage();
@@ -14,6 +20,7 @@ const FixiChatbot = () => {
   const [messages, setMessages] = useState([
     { role: "bot", content: t.chatbotGreeting }
   ]);
+  const [suggestions, setSuggestions] = useState(defaultSuggestions);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
@@ -31,6 +38,10 @@ const FixiChatbot = () => {
   }, [t.chatbotGreeting]);
 
   useEffect(() => {
+    setSuggestions(defaultSuggestions);
+  }, [t.chatbotGreeting]);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -44,28 +55,45 @@ const FixiChatbot = () => {
     };
   }, []);
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
+  const sendMessage = async (messageOverride = null) => {
+    const userMessage = (messageOverride ?? input).trim();
+    if (!userMessage || loading) return;
 
-    const userMessage = input.trim();
-    setInput("");
+    if (!messageOverride) {
+      setInput("");
+    }
     setMessages(prev => [...prev, { role: "user", content: userMessage }]);
     setLoading(true);
 
     try {
       const response = await api.post("/chat", {
         message: userMessage,
-        session_id: sessionId
+        session_id: sessionId,
+        history: messages.slice(-6).map((msg) => ({
+          role: msg.role === "bot" ? "assistant" : "user",
+          content: msg.content,
+        })),
       });
       
       setSessionId(response.data.session_id);
       setMessages(prev => [...prev, { role: "bot", content: response.data.response }]);
+      setSuggestions(
+        Array.isArray(response.data.suggestions) && response.data.suggestions.length
+          ? response.data.suggestions
+          : defaultSuggestions
+      );
     } catch (error) {
       toast.error("Failed to send message");
       setMessages(prev => [...prev, { role: "bot", content: "Sorry, I'm having trouble responding. Please try again!" }]);
+      setSuggestions(defaultSuggestions);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSuggestionClick = async (suggestion) => {
+    if (loading) return;
+    await sendMessage(suggestion);
   };
 
   const handleKeyPress = (e) => {
@@ -218,6 +246,23 @@ const FixiChatbot = () => {
               )}
             </div>
           </ScrollArea>
+
+          <div className="border-t border-slate-200 bg-white px-4 py-3">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Try asking</p>
+            <div className="flex flex-wrap gap-2">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
+                  disabled={loading}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Input */}
           <div className="border-t border-slate-200 bg-white p-4">

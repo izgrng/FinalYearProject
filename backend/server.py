@@ -35,6 +35,8 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OPENROUTER_CHAT_MODEL = os.environ.get("OPENROUTER_CHAT_MODEL", "openrouter/free").strip()
 OPENROUTER_CATEGORY_MODEL = os.environ.get("OPENROUTER_CATEGORY_MODEL", "openrouter/free").strip()
 OPENROUTER_VISION_MODEL = os.environ.get("OPENROUTER_VISION_MODEL", "openrouter/free").strip()
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+OPENAI_CHAT_MODEL = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini").strip()
 CLIP_MODEL_NAME = os.environ.get("CLIP_MODEL_NAME", "openai/clip-vit-base-patch32").strip()
 ENABLE_CLIP_IMAGE_ANALYSIS = os.environ.get("ENABLE_CLIP_IMAGE_ANALYSIS", "true").strip().lower() in {"1", "true", "yes", "on"}
 OPENROUTER_REFERER = os.environ.get("OPENROUTER_REFERER", "http://localhost:3000").strip()
@@ -154,9 +156,14 @@ class EventResponse(BaseModel):
     created_by: str
     created_at: str
 
+class ChatTurn(BaseModel):
+    role: str
+    content: str
+
 class ChatMessage(BaseModel):
     message: str
     session_id: Optional[str] = None
+    history: List[ChatTurn] = Field(default_factory=list)
 
 class MembershipRequest(BaseModel):
     reason: str
@@ -728,6 +735,37 @@ async def fixi_chat(message: str, session_id: str) -> str:
         "Tell me what you’d like to do."
     )
 
+async def fixi_chat_conversational(message: str, session_id: str) -> str:
+    """More natural fallback for everyday conversation, awareness, and guidance."""
+    text = message.lower().strip()
+
+    if any(phrase in text for phrase in ["how are you", "how are you doing", "how do you do"]):
+        return (
+            "I'm doing well, thanks. Happy to chat a bit, share awareness tips, or help you use Fixify."
+        )
+
+    if any(greet in text for greet in ["hi", "hello", "hey", "namaste"]):
+        return (
+            "Hi! I'm Fixi. I can chat naturally, give civic awareness tips, and help you around Fixify whenever you want."
+        )
+
+    if any(phrase in text for phrase in ["who are you", "what are you", "what can you do"]):
+        return (
+            "I'm Fixi, the assistant inside Fixify. I can talk with you casually, share civic awareness ideas, and help with reports, maps, the dashboard, and community features."
+        )
+
+    if any(phrase in text for phrase in ["awareness", "tip", "tips", "advice", "what should people know"]):
+        return (
+            "A good awareness tip is to report local issues early and clearly. A short description, the right location, and a helpful photo can make a big difference."
+        )
+
+    if any(phrase in text for phrase in ["fine", "good", "okay", "ok", "thanks", "thank you"]):
+        return (
+            "Glad to hear that. If you want, we can keep chatting, or I can help with reports, awareness tips, or anything inside Fixify."
+        )
+
+    return await fixi_chat(message, session_id)
+
 async def call_openrouter_chat(messages: List[dict]) -> Optional[str]:
     """Call OpenRouter chat completions API and return the first text response."""
     if not OPENROUTER_API_KEY:
@@ -762,16 +800,91 @@ async def call_openrouter_chat(messages: List[dict]) -> Optional[str]:
         logger.error(f"OpenRouter chat error: {e}")
         return None
 
-async def fixi_chat_ai(message: str, session_id: str, user: dict) -> str:
-    """Professional Fixi assistant powered by OpenRouter with rule fallback."""
+async def call_openai_chat(messages: List[dict]) -> Optional[str]:
+    """Call OpenAI chat completions API and return the first text response."""
+    if not OPENAI_API_KEY:
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": OPENAI_CHAT_MODEL,
+        "messages": messages,
+        "temperature": 0.5,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            choices = data.get("choices", [])
+            if not choices:
+                return None
+            return choices[0].get("message", {}).get("content")
+    except Exception as e:
+        logger.error(f"OpenAI chat error: {e}")
+        return None
+
+def build_fixi_suggestions(message: str, response: str) -> List[str]:
+    text = f"{message} {response}".lower()
+
+    if any(word in text for word in ["report", "issue", "submit"]):
+        return [
+            "How do I choose the right issue category?",
+            "What details make a report more useful?",
+            "Can I report an issue using a photo only?",
+        ]
+    if any(word in text for word in ["category", "categories"]):
+        return [
+            "Which category fits road damage best?",
+            "What happens after a category is chosen?",
+            "Can the AI category be changed later?",
+        ]
+    if any(word in text for word in ["dashboard", "map", "hotspot"]):
+        return [
+            "What does the dashboard show me?",
+            "How do I read issue hotspots?",
+            "Why are some reports marked for review?",
+        ]
+    if any(word in text for word in ["community", "event", "volunteer"]):
+        return [
+            "How do I join the community hub?",
+            "Who can create events in Fixify?",
+            "How does community activity help issue response?",
+        ]
+    if any(word in text for word in ["awareness", "tip", "safety", "advice"]):
+        return [
+            "Give me another awareness tip",
+            "How can citizens report issues more responsibly?",
+            "What makes a civic report clear and useful?",
+        ]
+    return [
+        "How do I report an issue?",
+        "Give me a civic awareness tip",
+        "What can I do in the community hub?",
+    ]
+
+async def fixi_chat_ai(message: str, session_id: str, user: dict, history: Optional[List[ChatTurn]] = None) -> dict:
+    """Conversational Fixi assistant powered by OpenAI first, then fallback providers."""
     messages = [
         {
             "role": "system",
             "content": (
-                "You are Fixi, the professional civic issue assistant for the Fixify platform. "
-                "Help users report local issues, understand categories, use the map, understand the dashboard, "
-                "and navigate community and moderator-related features. "
-                "Be clear, practical, concise, and professional. "
+                "You are Fixi, the assistant inside the Fixify platform. "
+                "Talk in a natural, warm, casual, human way, similar to a friendly ChatGPT-style assistant. "
+                "You can handle normal conversation, greetings, emotional check-ins, light small talk, civic awareness tips, "
+                "and platform guidance. "
+                "When the user asks a normal conversational question, answer it directly and naturally instead of forcing the reply back to the app. "
+                "When the user asks about Fixify features, explain them clearly and simply. "
+                "You may gently connect back to Fixify when it feels relevant, but do not sound robotic or repetitive. "
+                "Keep replies fairly concise, helpful, and easy to read. "
                 "Do not invent features the platform does not support."
             ),
         },
@@ -784,14 +897,28 @@ async def fixi_chat_ai(message: str, session_id: str, user: dict) -> str:
                 f"Session id: {session_id}."
             ),
         },
-        {"role": "user", "content": message},
     ]
+
+    for turn in (history or [])[-6:]:
+        role = turn.role if turn.role in {"user", "assistant"} else ("assistant" if turn.role == "bot" else "user")
+        content = (turn.content or "").strip()
+        if content:
+            messages.append({"role": role, "content": content})
+
+    messages.append({"role": "user", "content": message})
+
+    ai_response = await call_openai_chat(messages)
+    if ai_response:
+        reply = ai_response.strip()
+        return {"reply": reply, "suggestions": build_fixi_suggestions(message, reply)}
 
     ai_response = await call_openrouter_chat(messages)
     if ai_response:
-        return ai_response.strip()
+        reply = ai_response.strip()
+        return {"reply": reply, "suggestions": build_fixi_suggestions(message, reply)}
 
-    return await fixi_chat(message, session_id)
+    fallback = await fixi_chat_conversational(message, session_id)
+    return {"reply": fallback, "suggestions": build_fixi_suggestions(message, fallback)}
 
 # ==================== AUTH ENDPOINTS ====================
 
@@ -1768,7 +1895,8 @@ async def reject_post(post_id: str, user: dict = Depends(get_moderator)):
 @api_router.post("/chat")
 async def chat_with_fixi(chat_data: ChatMessage, user: dict = Depends(get_current_user)):
     session_id = chat_data.session_id or f"fixi-{user['id']}"
-    response = await fixi_chat_ai(chat_data.message, session_id, user)
+    response_payload = await fixi_chat_ai(chat_data.message, session_id, user, chat_data.history)
+    response_text = response_payload["reply"]
     
     # Store chat history
     chat_doc = {
@@ -1776,12 +1904,16 @@ async def chat_with_fixi(chat_data: ChatMessage, user: dict = Depends(get_curren
         "user_id": user["id"],
         "session_id": session_id,
         "user_message": chat_data.message,
-        "bot_response": response,
+        "bot_response": response_text,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.chat_history.insert_one(chat_doc)
     
-    return {"response": response, "session_id": session_id}
+    return {
+        "response": response_text,
+        "suggestions": response_payload.get("suggestions", []),
+        "session_id": session_id,
+    }
 
 @api_router.get("/chat/history")
 async def get_chat_history(user: dict = Depends(get_current_user)):
