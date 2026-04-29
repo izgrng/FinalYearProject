@@ -87,6 +87,10 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    avatar_base64: Optional[str] = None
+
 class UserResponse(BaseModel):
     id: str
     email: str
@@ -171,6 +175,9 @@ class NotificationResponse(BaseModel):
 class CommunityPostCreate(BaseModel):
     title: str
     content: str
+    location_name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 class CommunityPostCommentCreate(BaseModel):
     text: str
@@ -180,9 +187,19 @@ class EventUpdateCreate(BaseModel):
     outcome: Optional[str] = None
     image_base64: Optional[str] = None
 
+class CommunityPostUpdate(BaseModel):
+    title: str
+    content: str
+    location_name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
 class ReportStatusUpdate(BaseModel):
     status: str
     note: Optional[str] = None
+
+class UserRoleUpdate(BaseModel):
+    role: str
 
 # ==================== AUTH HELPERS ====================
 
@@ -235,10 +252,34 @@ def ensure_optional_text(value: Optional[str], field_name: str, max_len: int) ->
 def normalize_text(value: Optional[str]) -> str:
     return " ".join((value or "").strip().split())
 
+def ensure_valid_latitude(latitude: Optional[float]) -> Optional[float]:
+    if latitude is None:
+        return None
+    if latitude < -90 or latitude > 90:
+        raise HTTPException(status_code=400, detail="Latitude must be between -90 and 90")
+    return latitude
+
+def ensure_valid_longitude(longitude: Optional[float]) -> Optional[float]:
+    if longitude is None:
+        return None
+    if longitude < -180 or longitude > 180:
+        raise HTTPException(status_code=400, detail="Longitude must be between -180 and 180")
+    return longitude
+
+def normalize_optional_location_name(location_name: Optional[str]) -> Optional[str]:
+    cleaned = normalize_text(location_name)
+    return ensure_report_text(cleaned, "Location", 3, 160) if cleaned else None
+
 def ensure_valid_report_status(status: str) -> str:
     cleaned = " ".join((status or "").strip().split())
     if cleaned not in REPORT_STATUS_OPTIONS:
         raise HTTPException(status_code=400, detail="Invalid report status")
+    return cleaned
+
+def ensure_valid_user_role(role: str) -> str:
+    cleaned = " ".join((role or "").strip().split()).lower()
+    if cleaned not in {"user", "moderator"}:
+        raise HTTPException(status_code=400, detail="Invalid user role")
     return cleaned
 
 def tokenize_for_similarity(text: str) -> set[str]:
@@ -780,7 +821,8 @@ async def register(user_data: UserRegister):
             "email": email,
             "full_name": full_name,
             "role": "user",
-            "is_community_member": False
+            "is_community_member": False,
+            "avatar_base64": None
         }
     }
 
@@ -801,7 +843,8 @@ async def login(user_data: UserLogin):
             "email": user["email"],
             "full_name": user["full_name"],
             "role": user["role"],
-            "is_community_member": user.get("is_community_member", False)
+            "is_community_member": user.get("is_community_member", False),
+            "avatar_base64": user.get("avatar_base64")
         }
     }
 
@@ -812,7 +855,42 @@ async def get_me(user: dict = Depends(get_current_user)):
         "email": user["email"],
         "full_name": user["full_name"],
         "role": user["role"],
-        "is_community_member": user.get("is_community_member", False)
+        "is_community_member": user.get("is_community_member", False),
+        "avatar_base64": user.get("avatar_base64")
+    }
+
+@api_router.put("/auth/profile")
+async def update_profile(profile_data: ProfileUpdate, user: dict = Depends(get_current_user)):
+    update_doc = {}
+
+    if profile_data.full_name is not None:
+        update_doc["full_name"] = ensure_valid_full_name(profile_data.full_name)
+
+    if profile_data.avatar_base64 is not None:
+        avatar_value = profile_data.avatar_base64.strip() if profile_data.avatar_base64 else None
+        if avatar_value:
+            try:
+                image_bytes = base64.b64decode(avatar_value)
+                if len(image_bytes) > 5 * 1024 * 1024:
+                    raise HTTPException(status_code=400, detail="Profile image must be less than 5MB")
+            except HTTPException:
+                raise
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid profile image")
+        update_doc["avatar_base64"] = avatar_value
+
+    if not update_doc:
+        raise HTTPException(status_code=400, detail="No profile changes provided")
+
+    await db.users.update_one({"id": user["id"]}, {"$set": update_doc})
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password": 0})
+    return {
+        "id": updated_user["id"],
+        "email": updated_user["email"],
+        "full_name": updated_user["full_name"],
+        "role": updated_user["role"],
+        "is_community_member": updated_user.get("is_community_member", False),
+        "avatar_base64": updated_user.get("avatar_base64")
     }
 
 @api_router.get("/users/{user_id}")
@@ -825,8 +903,42 @@ async def get_public_user(user_id: str):
         "full_name": user["full_name"],
         "role": user.get("role", "user"),
         "is_community_member": user.get("is_community_member", False),
-        "created_at": user.get("created_at")
+        "created_at": user.get("created_at"),
+        "avatar_base64": user.get("avatar_base64")
     }
+
+@api_router.get("/moderation/users")
+async def get_users_for_moderation(user: dict = Depends(get_moderator)):
+    users = await db.users.find(
+        {},
+        {"_id": 0, "password": 0}
+    ).sort("created_at", -1).to_list(200)
+    return users
+
+@api_router.post("/moderation/users/{user_id}/role")
+async def update_user_role(user_id: str, role_data: UserRoleUpdate, user: dict = Depends(get_moderator)):
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    next_role = ensure_valid_user_role(role_data.role)
+    if target["id"] == user["id"] and next_role != "moderator":
+        raise HTTPException(status_code=400, detail="You cannot remove your own moderator access")
+    if target.get("role", "user") == next_role:
+        raise HTTPException(status_code=400, detail=f"{target['full_name']} already has that role")
+
+    await db.users.update_one({"id": user_id}, {"$set": {"role": next_role}})
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": target["id"],
+        "type": "role_update",
+        "report_id": user_id,
+        "message": f"Your account role is now {next_role}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "read": False
+    })
+    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+    return updated_user
 
 # ==================== REPORTS ENDPOINTS ====================
 
@@ -1212,8 +1324,11 @@ async def get_notifications(user: dict = Depends(get_current_user)):
 
 @api_router.post("/notifications/mark-read")
 async def mark_notifications_read(user: dict = Depends(get_current_user)):
+    user_key = user["id"]
+    if user.get("role") == "moderator":
+        user_key = "moderator"
     await db.notifications.update_many(
-        {"user_id": user["id"], "read": False},
+        {"user_id": user_key, "read": False},
         {"$set": {"read": True}}
     )
     return {"message": "Notifications marked as read"}
@@ -1490,15 +1605,26 @@ async def create_community_post(post: CommunityPostCreate, user: dict = Depends(
         raise HTTPException(status_code=403, detail="Community membership required")
     title = ensure_report_text(post.title, "Post title", 5, 120)
     content = ensure_report_text(post.content, "Post content", 10, 2000)
+    latitude = ensure_valid_latitude(post.latitude)
+    longitude = ensure_valid_longitude(post.longitude)
+    location_name = normalize_optional_location_name(post.location_name)
+    if (latitude is None) != (longitude is None):
+        raise HTTPException(status_code=400, detail="Please provide both latitude and longitude")
+    if latitude is not None and not location_name:
+        raise HTTPException(status_code=400, detail="Please provide a meeting point name for the selected location")
     post_doc = {
         "id": str(uuid.uuid4()),
         "title": title,
         "content": content,
+        "location_name": location_name,
+        "latitude": latitude,
+        "longitude": longitude,
         "user_id": user["id"],
         "user_name": user["full_name"],
         "status": "pending",
         "comments": [],
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.community_posts.insert_one(post_doc)
     # Notify moderators
@@ -1520,6 +1646,49 @@ async def get_community_posts(status: Optional[str] = "approved"):
         query["status"] = status
     posts = await db.community_posts.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     return posts
+
+@api_router.get("/community/posts/mine")
+async def get_my_community_posts(user: dict = Depends(get_current_user)):
+    posts = await db.community_posts.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return posts
+
+@api_router.get("/community/posts/user/{user_id}")
+async def get_user_community_posts(user_id: str):
+    posts = await db.community_posts.find(
+        {"user_id": user_id, "status": "approved"},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return posts
+
+@api_router.put("/community/posts/{post_id}")
+async def update_community_post(post_id: str, post: CommunityPostUpdate, user: dict = Depends(get_current_user)):
+    existing = await db.community_posts.find_one({"id": post_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if existing.get("user_id") != user["id"] and user.get("role") != "moderator":
+        raise HTTPException(status_code=403, detail="You can only edit your own posts")
+
+    title = ensure_report_text(post.title, "Post title", 5, 120)
+    content = ensure_report_text(post.content, "Post content", 10, 2000)
+    latitude = ensure_valid_latitude(post.latitude)
+    longitude = ensure_valid_longitude(post.longitude)
+    location_name = normalize_optional_location_name(post.location_name)
+    if (latitude is None) != (longitude is None):
+        raise HTTPException(status_code=400, detail="Please provide both latitude and longitude")
+    if latitude is not None and not location_name:
+        raise HTTPException(status_code=400, detail="Please provide a meeting point name for the selected location")
+
+    update_doc = {
+        "title": title,
+        "content": content,
+        "location_name": location_name,
+        "latitude": latitude,
+        "longitude": longitude,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.community_posts.update_one({"id": post_id}, {"$set": update_doc})
+    updated = await db.community_posts.find_one({"id": post_id}, {"_id": 0})
+    return updated
 
 @api_router.get("/community/posts/pending")
 async def get_pending_posts(user: dict = Depends(get_moderator)):

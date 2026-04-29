@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -203,7 +203,7 @@ export const ReportMap = ({ reports, onMarkerClick, selectedReport }) => {
   );
 };
 
-export const LocationPicker = ({ onLocationSelect, selectedLocation, mapCenter }) => {
+export const LocationPicker = ({ onLocationSelect, selectedLocation, mapCenter, compact = false }) => {
   const [position, setPosition] = useState(selectedLocation);
   const [initialCenter, setInitialCenter] = useState(
     selectedLocation
@@ -213,6 +213,11 @@ export const LocationPicker = ({ onLocationSelect, selectedLocation, mapCenter }
         : null
   );
   const [ready, setReady] = useState(Boolean(selectedLocation || mapCenter));
+  const [searchText, setSearchText] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const mapHeight = useMemo(() => (compact ? "h-[220px]" : "h-[300px]"), [compact]);
 
   const handleSelect = (pos) => {
     setPosition(pos);
@@ -234,7 +239,7 @@ export const LocationPicker = ({ onLocationSelect, selectedLocation, mapCenter }
       return;
     }
     if (!navigator.geolocation) {
-      setInitialCenter(defaultCenter);
+      setInitialCenter(DEFAULT_CENTER);
       setReady(true);
       return;
     }
@@ -254,6 +259,42 @@ export const LocationPicker = ({ onLocationSelect, selectedLocation, mapCenter }
     );
   }, [selectedLocation, mapCenter, onLocationSelect]);
 
+  const searchLocation = async () => {
+    const query = searchText.trim();
+    if (!query) return;
+    setSearching(true);
+    setSearchError("");
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(query)}`,
+        {
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+      const data = await response.json();
+      setResults(Array.isArray(data) ? data : []);
+      if (!Array.isArray(data) || data.length === 0) {
+        setSearchError("No location found. Try a more specific place name.");
+      } else {
+        chooseSearchResult(data[0], false);
+      }
+    } catch (error) {
+      setSearchError("Search is unavailable right now. You can still place the pin manually.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const chooseSearchResult = (item, clearList = true) => {
+    const next = { lat: Number(item.lat), lng: Number(item.lon) };
+    handleSelect(next);
+    setSearchText(item.display_name || "");
+    if (clearList) setResults([]);
+    setSearchError("");
+  };
+
   if (!ready || !initialCenter) {
     return (
       <div className="flex h-[300px] items-center justify-center rounded-xl bg-slate-100 text-sm text-slate-500">
@@ -263,19 +304,67 @@ export const LocationPicker = ({ onLocationSelect, selectedLocation, mapCenter }
   }
 
   return (
-    <MapContainer
-      center={initialCenter}
-      zoom={13}
-      className="w-full h-[300px] rounded-xl"
-      scrollWheelZoom={false}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      <LocationSelector onSelect={handleSelect} selectedPosition={position} />
-      <FlyToPickerLocation position={position || mapCenter} />
-    </MapContainer>
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <input
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              searchLocation();
+            }
+          }}
+          placeholder="Search place or meeting point..."
+          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-400 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={searchLocation}
+          className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          disabled={searching}
+        >
+          {searching ? "Searching..." : "Search"}
+        </button>
+      </div>
+      {searchError ? (
+        <p className="text-xs text-rose-600">{searchError}</p>
+      ) : (
+        <p className="text-xs text-slate-500">
+          Search jumps the marker straight to the best-matching place, or you can still click directly on the map.
+        </p>
+      )}
+      <MapContainer
+        center={initialCenter}
+        zoom={13}
+        className={`w-full ${mapHeight} rounded-xl`}
+        scrollWheelZoom={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <LocationSelector onSelect={handleSelect} selectedPosition={position} />
+        <FlyToPickerLocation position={position || mapCenter} />
+      </MapContainer>
+      {results.length > 1 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <p className="text-sm font-semibold text-slate-900">Other close matches</p>
+          <div className="mt-3 space-y-2">
+            {results.slice(1, 4).map((item) => (
+              <button
+                key={`${item.place_id}`}
+                type="button"
+                onClick={() => chooseSearchResult(item)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-left text-sm text-slate-700 hover:border-indigo-200 hover:bg-slate-50"
+              >
+                {item.display_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

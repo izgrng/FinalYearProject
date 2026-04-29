@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -6,26 +7,32 @@ import { Textarea } from "../components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
+import { LocationPicker } from "../components/MapComponent";
 import { 
-  Users, Calendar, MapPin, UserPlus, Clock, 
-  CheckCircle2, AlertCircle, Loader2, Heart, FileText, Link2, MessageSquare, ImagePlus, Send
+  Users, Calendar, MapPin, UserPlus,
+  CheckCircle2, Loader2, Heart, FileText, Link2, MessageSquare, ImagePlus, Send, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const emptyPostForm = { title: "", content: "", location_name: "", latitude: null, longitude: null };
 
 const CommunityHub = () => {
   const { user, api } = useAuth();
   const [events, setEvents] = useState([]);
   const [reports, setReports] = useState([]);
   const [posts, setPosts] = useState([]);
-  const [postForm, setPostForm] = useState({ title: "", content: "" });
+  const [postForm, setPostForm] = useState(emptyPostForm);
+  const [editPostForm, setEditPostForm] = useState(emptyPostForm);
+  const [editingPost, setEditingPost] = useState(null);
+  const [editPostOpen, setEditPostOpen] = useState(false);
   const [commentDrafts, setCommentDrafts] = useState({});
   const [commentLoading, setCommentLoading] = useState(null);
   const [eventUpdateForms, setEventUpdateForms] = useState({});
   const [eventUpdateLoading, setEventUpdateLoading] = useState(null);
   const [posting, setPosting] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [membershipStatus, setMembershipStatus] = useState(null);
   const [membershipReason, setMembershipReason] = useState("");
@@ -54,19 +61,51 @@ const CommunityHub = () => {
   }, [fetchEvents]);
 
   const submitPost = async () => {
-    if (!postForm.title || !postForm.content) {
-      toast.error("Please fill all post fields");
+    if (!postForm.title || !postForm.content || !postForm.location_name || postForm.latitude == null || postForm.longitude == null) {
+      toast.error("Please add a title, details, and meeting point");
       return;
     }
     setPosting(true);
     try {
       await api.post("/community/posts", postForm);
       toast.success("Post submitted for approval");
-      setPostForm({ title: "", content: "" });
+      setPostForm(emptyPostForm);
     } catch (error) {
-      toast.error("Failed to submit post");
+      toast.error(error.response?.data?.detail || "Failed to submit post");
     } finally {
       setPosting(false);
+    }
+  };
+
+  const openEditPost = (post) => {
+    setEditingPost(post);
+    setEditPostForm({
+      title: post.title || "",
+      content: post.content || "",
+      location_name: post.location_name || "",
+      latitude: post.latitude ?? null,
+      longitude: post.longitude ?? null,
+    });
+    setEditPostOpen(true);
+  };
+
+  const submitPostEdit = async () => {
+    if (!editingPost) return;
+    if (!editPostForm.title || !editPostForm.content || !editPostForm.location_name || editPostForm.latitude == null || editPostForm.longitude == null) {
+      toast.error("Please keep the post title, details, and meeting point filled in");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const response = await api.put(`/community/posts/${editingPost.id}`, editPostForm);
+      setPosts((prev) => prev.map((post) => (post.id === editingPost.id ? response.data : post)));
+      setEditPostOpen(false);
+      setEditingPost(null);
+      toast.success("Post updated");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to update post");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -209,10 +248,17 @@ const CommunityHub = () => {
     });
   };
 
+  const formatPostDate = (dateStr) =>
+    new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-gradient-to-b from-cyan-50 via-white to-indigo-50 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
       {/* Hero Section */}
-      <div className="relative bg-gradient-to-br from-indigo-600 via-purple-600 to-indigo-700 py-16">
+      <div className="relative overflow-hidden bg-gradient-to-br from-cyan-500 via-indigo-600 to-violet-700 py-16">
         <div 
           className="absolute inset-0 opacity-10"
           style={{
@@ -299,8 +345,8 @@ const CommunityHub = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 font-[Manrope]">Upcoming Events</h2>
-            <p className="text-slate-600">Join local volunteering activities</p>
+            <h2 className="text-2xl font-bold text-slate-900 font-[Manrope] dark:text-white">Upcoming Events</h2>
+            <p className="text-slate-600 dark:text-slate-300">Join local volunteering activities</p>
           </div>
           {user?.role === "moderator" && (
             <Badge className="bg-purple-100 text-purple-700">Moderator</Badge>
@@ -319,7 +365,7 @@ const CommunityHub = () => {
               const canPostEventUpdate = user && (user.role === "moderator" || isJoined);
 
               return (
-                <Card key={event.id} className="border-0 shadow-sm hover:shadow-md transition-shadow" data-testid={`event-card-${event.id}`}>
+                <Card key={event.id} className="border border-cyan-100 shadow-sm hover:shadow-md transition-shadow dark:border-slate-800 dark:bg-slate-900" data-testid={`event-card-${event.id}`}>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <CardTitle className="text-lg">{event.title}</CardTitle>
@@ -344,8 +390,8 @@ const CommunityHub = () => {
                         <span>{event.participants?.length || 0} / {event.max_participants} participants</span>
                       </div>
                       {event.related_report_ids?.length > 0 && (
-                        <div className="space-y-2 rounded-xl bg-slate-50 p-3">
-                          <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <div className="space-y-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
+                          <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
                             <Link2 className="w-4 h-4 text-indigo-600" />
                             Linked Reports
                           </div>
@@ -428,7 +474,7 @@ const CommunityHub = () => {
                         )}
 
                         {canPostEventUpdate && (
-                          <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+                          <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3 dark:border-slate-800 dark:bg-slate-950">
                             <Textarea
                               placeholder="Share what happened during or after this event..."
                               value={eventUpdateForms[event.id]?.text || ""}
@@ -472,11 +518,11 @@ const CommunityHub = () => {
             })}
           </div>
         ) : (
-          <Card className="border-0 shadow-sm">
+            <Card className="border border-cyan-100 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <CardContent className="py-16 text-center">
               <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">No Events Yet</h3>
-              <p className="text-slate-600">Check back soon for upcoming community activities!</p>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2 dark:text-white">No Events Yet</h3>
+              <p className="text-slate-600 dark:text-slate-300">Check back soon for upcoming community activities!</p>
             </CardContent>
           </Card>
         )}
@@ -485,26 +531,60 @@ const CommunityHub = () => {
         <div className="mt-12">
           <div className="flex items-center gap-2 mb-4">
             <FileText className="w-5 h-5 text-indigo-600" />
-            <h3 className="text-xl font-semibold text-slate-900">Community Posts</h3>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Community Posts</h3>
           </div>
 
           {user?.is_community_member && (
-            <Card className="border-0 shadow-sm mb-6">
-              <CardContent className="p-4 space-y-3">
-                <Input
-                  placeholder="Post title"
-                  value={postForm.title}
-                  onChange={(e) => setPostForm({ ...postForm, title: e.target.value })}
-                />
-                <Textarea
-                  placeholder="Share your update..."
-                  value={postForm.content}
-                  onChange={(e) => setPostForm({ ...postForm, content: e.target.value })}
-                  className="min-h-[120px]"
-                />
-                <Button onClick={submitPost} disabled={posting}>
+            <Card className="mb-6 border border-cyan-100 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <CardContent className="p-5">
+                <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+                  <div className="space-y-3">
+                    <Input
+                      placeholder="Post title"
+                      value={postForm.title}
+                      onChange={(e) => setPostForm({ ...postForm, title: e.target.value })}
+                    />
+                    <Textarea
+                      placeholder="Share your update..."
+                      value={postForm.content}
+                      onChange={(e) => setPostForm({ ...postForm, content: e.target.value })}
+                      className="min-h-[120px]"
+                    />
+                    <Input
+                      placeholder="Meeting point name"
+                      value={postForm.location_name}
+                      onChange={(e) => setPostForm({ ...postForm, location_name: e.target.value })}
+                    />
+                    {postForm.latitude != null && postForm.longitude != null && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Marker set at {postForm.latitude.toFixed(5)}, {postForm.longitude.toFixed(5)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Pick gathering location</p>
+                    <LocationPicker
+                      compact
+                      selectedLocation={
+                        postForm.latitude != null && postForm.longitude != null
+                          ? { lat: postForm.latitude, lng: postForm.longitude }
+                          : null
+                      }
+                      onLocationSelect={(location) =>
+                        setPostForm((prev) => ({
+                          ...prev,
+                          latitude: location.lat,
+                          longitude: location.lng,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <Button onClick={submitPost} disabled={posting}>
                   {posting ? "Submitting..." : "Submit for Approval"}
-                </Button>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -512,13 +592,50 @@ const CommunityHub = () => {
           {posts.length === 0 ? (
             <p className="text-slate-600">No community posts yet.</p>
           ) : (
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-4">
               {posts.map((post) => (
-                <Card key={post.id} className="border-0 shadow-sm">
+                <Card key={post.id} className="border border-cyan-100 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                   <CardContent className="p-4">
-                    <h4 className="font-semibold text-slate-900 mb-2">{post.title}</h4>
-                    <p className="text-sm text-slate-600 mb-2">{post.content}</p>
-                    <p className="text-xs text-slate-500">Posted by {post.user_name}</p>
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-sm font-semibold text-white">
+                          {post.user_name?.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <Link to={`/users/${post.user_id}`} className="font-semibold text-slate-900 hover:underline dark:text-white">
+                            {post.user_name}
+                          </Link>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                            <span>{formatPostDate(post.created_at)}</span>
+                            {post.status && (
+                              <Badge variant="outline" className="text-[11px]">
+                                {post.status}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {(user?.id === post.user_id || user?.role === "moderator") && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => openEditPost(post)}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit
+                        </Button>
+                      )}
+                    </div>
+                    <h4 className="font-semibold text-slate-900 dark:text-white">{post.title}</h4>
+                    <p className="mb-3 mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">{post.content}</p>
+                    {post.location_name && (
+                      <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {post.location_name}
+                      </div>
+                    )}
 
                     <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
                       <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
@@ -528,9 +645,9 @@ const CommunityHub = () => {
                       {post.comments?.length > 0 ? (
                         <div className="space-y-2">
                           {post.comments.map((comment) => (
-                            <div key={comment.id} className="rounded-xl bg-slate-50 px-3 py-2">
-                              <p className="text-sm text-slate-700">{comment.text}</p>
-                              <p className="mt-1 text-[11px] text-slate-500">By {comment.user_name}</p>
+                            <div key={comment.id} className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-950">
+                              <p className="text-sm text-slate-700 dark:text-slate-200">{comment.text}</p>
+                              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">By {comment.user_name}</p>
                             </div>
                           ))}
                         </div>
@@ -565,35 +682,92 @@ const CommunityHub = () => {
           )}
         </div>
 
+        <Dialog open={editPostOpen} onOpenChange={setEditPostOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Edit Community Post</DialogTitle>
+              <DialogDescription>
+                Update the post details and meeting point so people know exactly where to gather.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-6 pt-4 lg:grid-cols-[1.15fr_0.85fr]">
+              <div className="space-y-4">
+                <Input
+                  placeholder="Post title"
+                  value={editPostForm.title}
+                  onChange={(e) => setEditPostForm({ ...editPostForm, title: e.target.value })}
+                />
+                <Textarea
+                  placeholder="Share your update..."
+                  value={editPostForm.content}
+                  onChange={(e) => setEditPostForm({ ...editPostForm, content: e.target.value })}
+                  className="min-h-[120px]"
+                />
+                <Input
+                  placeholder="Meeting point name"
+                  value={editPostForm.location_name}
+                  onChange={(e) => setEditPostForm({ ...editPostForm, location_name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-700">Update gathering location</p>
+                <LocationPicker
+                  compact
+                  selectedLocation={
+                    editPostForm.latitude != null && editPostForm.longitude != null
+                      ? { lat: editPostForm.latitude, lng: editPostForm.longitude }
+                      : null
+                  }
+                  onLocationSelect={(location) =>
+                    setEditPostForm((prev) => ({
+                      ...prev,
+                      latitude: location.lat,
+                      longitude: location.lng,
+                    }))
+                  }
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEditPostOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={submitPostEdit} disabled={savingEdit}>
+                  {savingEdit ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Info Section */}
         <div className="mt-16 grid md:grid-cols-3 gap-6">
-          <Card className="border-0 shadow-sm bg-indigo-50">
+          <Card className="border border-indigo-100 shadow-sm bg-indigo-50 dark:border-slate-800 dark:bg-slate-900">
             <CardContent className="p-6 text-center">
               <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mx-auto mb-4">
                 <Users className="w-6 h-6 text-indigo-600" />
               </div>
-              <h3 className="font-semibold text-slate-900 mb-2">Join the Community</h3>
-              <p className="text-sm text-slate-600">Request membership to participate in events and activities.</p>
+              <h3 className="font-semibold text-slate-900 mb-2 dark:text-white">Join the Community</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300">Request membership to participate in events and activities.</p>
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm bg-purple-50">
+          <Card className="border border-purple-100 shadow-sm bg-purple-50 dark:border-slate-800 dark:bg-slate-900">
             <CardContent className="p-6 text-center">
               <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-4">
                 <Calendar className="w-6 h-6 text-purple-600" />
               </div>
-              <h3 className="font-semibold text-slate-900 mb-2">Volunteer Events</h3>
-              <p className="text-sm text-slate-600">Participate in clean-ups, awareness drives, and more.</p>
+              <h3 className="font-semibold text-slate-900 mb-2 dark:text-white">Volunteer Events</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300">Participate in clean-ups, awareness drives, and more.</p>
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm bg-cyan-50">
+          <Card className="border border-cyan-100 shadow-sm bg-cyan-50 dark:border-slate-800 dark:bg-slate-900">
             <CardContent className="p-6 text-center">
               <div className="w-12 h-12 bg-cyan-100 rounded-xl flex items-center justify-center mx-auto mb-4">
                 <Heart className="w-6 h-6 text-cyan-600" />
               </div>
-              <h3 className="font-semibold text-slate-900 mb-2">Make an Impact</h3>
-              <p className="text-sm text-slate-600">Help improve your neighborhood and inspire others.</p>
+              <h3 className="font-semibold text-slate-900 mb-2 dark:text-white">Make an Impact</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300">Help improve your neighborhood and inspire others.</p>
             </CardContent>
           </Card>
         </div>

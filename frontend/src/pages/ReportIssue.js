@@ -172,12 +172,50 @@ const ReportIssue = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-cyan-50 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 font-[Manrope]" data-testid="report-title">Report an Issue</h1>
-          <p className="text-slate-600 mt-2">Help improve your community by reporting problems</p>
+        <div className="mb-8 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+          <div className="grid gap-0 md:grid-cols-[1.05fr_0.95fr]">
+            <div className="p-8 md:p-10">
+              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700">
+                <Sparkles className="h-4 w-4" />
+                Guided reporting
+              </div>
+              <h1 className="mt-5 text-3xl font-bold text-slate-900 font-[Manrope]" data-testid="report-title">Report an Issue</h1>
+              <p className="mt-3 max-w-xl text-base leading-7 text-slate-600">
+                Send a clearer report with text, image, and an exact map location so the issue is easier to understand and act on.
+              </p>
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-900">Text or image</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">You can submit with either one, or both together.</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-900">Map placement</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">Pin the issue where it is actually happening.</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-900">AI support</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">Fixify helps classify and understand the report.</p>
+                </div>
+              </div>
+            </div>
+            <div className="relative min-h-[260px] overflow-hidden">
+              <img
+                src="/images/img1.jpg"
+                alt="Local issue being documented"
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/20 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                <p className="text-sm font-medium uppercase tracking-[0.14em] text-cyan-200">From problem to signal</p>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-slate-200">
+                  The better the submission, the easier it is for the dashboard, moderators, and the community to respond.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Progress Steps */}
@@ -200,7 +238,7 @@ const ReportIssue = () => {
 
         {/* Step 1: Details */}
         {step === 1 && (
-          <Card className="border-0 shadow-lg">
+          <Card className="border-0 shadow-xl shadow-slate-200/70">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-indigo-600" />
@@ -238,7 +276,7 @@ const ReportIssue = () => {
               {/* Image Upload */}
               <div className="space-y-2">
                 <Label>Photo (Optional but recommended)</Label>
-                <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors">
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/70 p-6 text-center transition-colors hover:border-indigo-400">
                   {imagePreview ? (
                     <div className="relative inline-block">
                       <img 
@@ -300,7 +338,7 @@ const ReportIssue = () => {
 
         {/* Step 2: Location */}
         {step === 2 && (
-          <Card className="border-0 shadow-lg">
+          <Card className="border-0 shadow-xl shadow-slate-200/70">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-indigo-600" />
@@ -406,7 +444,7 @@ const ReportIssue = () => {
 
         {/* Step 3: Success */}
         {step === 3 && aiResult && (
-          <Card className="border-0 shadow-lg">
+          <Card className="border-0 shadow-xl shadow-slate-200/70">
             <CardContent className="py-12 text-center">
               <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
                 <CheckCircle2 className="w-10 h-10 text-green-600" />

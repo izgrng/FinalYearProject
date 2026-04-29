@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
@@ -6,20 +6,33 @@ import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
-import { MapPin, Clock, ThumbsUp, FileText, User, Mail, Calendar } from "lucide-react";
+import { LocationPicker } from "../components/MapComponent";
+import { Camera, MapPin, ThumbsUp, FileText, Mail, MessageSquare } from "lucide-react";
 
 const Profile = () => {
-  const { user, api } = useAuth();
+  const { user, api, setUser } = useAuth();
+  const avatarInputRef = useRef(null);
   const [reports, setReports] = useState([]);
+  const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [updatingAvatar, setUpdatingAvatar] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editReport, setEditReport] = useState(null);
   const [editForm, setEditForm] = useState({ title: "", description: "" });
+  const [editPostOpen, setEditPostOpen] = useState(false);
+  const [editPost, setEditPost] = useState(null);
+  const [editPostForm, setEditPostForm] = useState({
+    title: "", content: "", location_name: "", latitude: null, longitude: null
+  });
 
   const fetchMyReports = useCallback(async () => {
     try {
-      const response = await api.get("/reports/user/mine");
-      setReports(response.data);
+      const [reportsResponse, postsResponse] = await Promise.all([
+        api.get("/reports/user/mine"),
+        api.get("/community/posts/mine")
+      ]);
+      setReports(reportsResponse.data);
+      setPosts(postsResponse.data);
     } catch (error) {
       console.error("Error fetching reports:", error);
     } finally {
@@ -79,6 +92,55 @@ const Profile = () => {
     }
   };
 
+  const startPostEdit = (post) => {
+    setEditPost(post);
+    setEditPostForm({
+      title: post.title || "",
+      content: post.content || "",
+      location_name: post.location_name || "",
+      latitude: post.latitude ?? null,
+      longitude: post.longitude ?? null,
+    });
+    setEditPostOpen(true);
+  };
+
+  const submitPostEdit = async () => {
+    if (!editPost) return;
+    try {
+      const res = await api.put(`/community/posts/${editPost.id}`, editPostForm);
+      setPosts((prev) => prev.map((post) => (post.id === editPost.id ? res.data : post)));
+      setEditPostOpen(false);
+    } catch (error) {
+      console.error("Failed to update post", error);
+    }
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result.split(",")[1];
+      setUpdatingAvatar(true);
+      try {
+        const res = await api.put("/auth/profile", { avatar_base64: base64 });
+        setUser(res.data);
+      } catch (error) {
+        console.error("Failed to update profile image", error);
+      } finally {
+        setUpdatingAvatar(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -86,8 +148,32 @@ const Profile = () => {
         <Card className="border-0 shadow-sm mb-8">
           <CardContent className="p-8">
             <div className="flex items-center gap-6">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-3xl font-bold">
-                {user?.full_name?.charAt(0).toUpperCase()}
+              <div className="relative">
+                {user?.avatar_base64 ? (
+                  <img
+                    src={`data:image/jpeg;base64,${user.avatar_base64}`}
+                    alt={user?.full_name}
+                    className="h-20 w-20 rounded-full object-cover ring-4 ring-white shadow-md"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-3xl font-bold">
+                    {user?.full_name?.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg hover:bg-slate-800"
+                >
+                  <Camera className="h-4 w-4" />
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900 font-[Manrope]" data-testid="profile-name">{user?.full_name}</h1>
@@ -103,6 +189,9 @@ const Profile = () => {
                     <Badge className="bg-green-100 text-green-700">Community Member</Badge>
                   )}
                 </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  {updatingAvatar ? "Updating profile picture..." : "Tap the camera icon to change your profile picture."}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -204,6 +293,54 @@ const Profile = () => {
             )}
           </CardContent>
         </Card>
+
+        <Card className="mt-8 border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-indigo-600" />
+              My Community Posts
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8">Loading...</div>
+            ) : posts.length > 0 ? (
+              <div className="space-y-4">
+                {posts.map((post) => (
+                  <div key={post.id} className="rounded-xl bg-slate-50 p-4">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <h3 className="font-semibold text-slate-900">{post.title}</h3>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={post.status === "approved" ? "secondary" : "outline"}>
+                          {post.status}
+                        </Badge>
+                        <Button variant="outline" size="sm" onClick={() => startPostEdit(post)}>
+                          Edit
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-600">{post.content}</p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                      {post.location_name && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">
+                          <MapPin className="h-3 w-3" />
+                          {post.location_name}
+                        </span>
+                      )}
+                      <span>{formatDate(post.created_at)}</span>
+                      <span>{post.comments?.length || 0} comments</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                <p className="text-slate-600">You haven't shared any community posts yet</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -232,6 +369,55 @@ const Profile = () => {
                 Cancel
               </Button>
               <Button onClick={submitEdit}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editPostOpen} onOpenChange={setEditPostOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Community Post</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={editPostForm.title}
+              onChange={(e) => setEditPostForm({ ...editPostForm, title: e.target.value })}
+              placeholder="Post title"
+            />
+            <Textarea
+              value={editPostForm.content}
+              onChange={(e) => setEditPostForm({ ...editPostForm, content: e.target.value })}
+              className="min-h-[120px]"
+              placeholder="Share your update..."
+            />
+            <Input
+              value={editPostForm.location_name}
+              onChange={(e) => setEditPostForm({ ...editPostForm, location_name: e.target.value })}
+              placeholder="Meeting point name"
+            />
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Gathering location</label>
+              <LocationPicker
+                selectedLocation={
+                  editPostForm.latitude != null && editPostForm.longitude != null
+                    ? { lat: editPostForm.latitude, lng: editPostForm.longitude }
+                    : null
+                }
+                onLocationSelect={(location) =>
+                  setEditPostForm((prev) => ({
+                    ...prev,
+                    latitude: location.lat,
+                    longitude: location.lng,
+                  }))
+                }
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditPostOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={submitPostEdit}>Save</Button>
             </div>
           </div>
         </DialogContent>

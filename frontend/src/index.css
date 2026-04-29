@@ -93,11 +93,19 @@
 .leaflet-container {
   font-family: 'Jost', sans-serif;
   border-radius: 1rem;
+  z-index: 0;
 }
 
 .leaflet-popup-content-wrapper {
   border-radius: 0.75rem;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.leaflet-control-container,
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 10 !important;
 }
 
 /* Animation classes */
@@ -131,6 +139,15 @@
   50% { transform: translateY(-12px); }
 }
 
+@keyframes fixi-shake-soft {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  10% { transform: translate3d(-1px, 0, 0) rotate(-2deg); }
+  20% { transform: translate3d(2px, 0, 0) rotate(2deg); }
+  30% { transform: translate3d(-2px, 0, 0) rotate(-2deg); }
+  40% { transform: translate3d(2px, 0, 0) rotate(2deg); }
+  50% { transform: translate3d(-1px, 0, 0) rotate(-1deg); }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out forwards;
 }
@@ -145,6 +162,24 @@
 
 .animate-float-soft {
   animation: float-soft 6s ease-in-out infinite;
+}
+
+.fixi-launcher {
+  animation: float-soft 6s ease-in-out infinite;
+}
+
+.fixi-launcher:hover {
+  animation-play-state: paused;
+}
+
+.fixi-launcher::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  animation: fixi-shake-soft 3.6s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .motion-banner {
@@ -269,7 +304,9 @@
   .animate-float-soft,
   .animate-fade-in,
   .animate-slide-up,
-  .animate-pulse-glow {
+  .animate-pulse-glow,
+  .fixi-launcher,
+  .fixi-launcher::after {
     animation: none;
   }
 }

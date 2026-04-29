@@ -3,25 +3,46 @@ import { useAuth } from "../context/AuthContext";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
-import { X, Send, User } from "lucide-react";
+import { X, Send, User, Mic, Square } from "lucide-react";
 import { toast } from "sonner";
+import { useLanguage } from "../context/LanguageContext";
 
 const FixiChatbot = () => {
   const { api } = useAuth();
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "bot", content: "Hi! I'm Fixi, your friendly AI assistant. How can I help you today? I can guide you on reporting issues, explain how Fixify works, or share civic awareness tips!" }
+    { role: "bot", content: t.chatbotGreeting }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
   const scrollRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    setMessages((prev) => {
+      if (!prev.length) return [{ role: "bot", content: t.chatbotGreeting }];
+      const [first, ...rest] = prev;
+      if (first.role !== "bot") return prev;
+      return [{ ...first, content: t.chatbotGreeting }, ...rest];
+    });
+  }, [t.chatbotGreeting]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -54,20 +75,69 @@ const FixiChatbot = () => {
     }
   };
 
+  const toggleVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Voice input is not supported in this browser");
+      return;
+    }
+
+    if (isRecording && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript || "")
+        .join(" ");
+      setInput(transcript.trim());
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onerror = () => {
+      setIsRecording(false);
+      recognitionRef.current = null;
+      toast.error("Could not capture voice input");
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
   return (
     <>
       {/* Chat Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-xl shadow-slate-900/15 ring-1 ring-slate-200 transition-all hover:-translate-y-0.5 hover:shadow-2xl ${isOpen ? 'hidden' : ''}`}
+        className={`fixi-launcher fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-full bg-white px-4 py-3 shadow-xl shadow-slate-900/20 ring-1 ring-slate-200 transition-all hover:-translate-y-0.5 hover:shadow-2xl ${isOpen ? 'hidden' : ''}`}
         data-testid="fixi-chat-btn"
       >
-        <img
-          src="/images/Fixi.png"
-          alt="Fixi AI"
-          className="h-9 w-9 rounded-full object-cover"
-        />
-        <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse" />
+        <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 ring-1 ring-slate-200">
+          <img
+            src="/images/Fixi.png"
+            alt="Fixi AI"
+            className="h-9 w-9 rounded-full object-cover"
+          />
+          <span className="absolute -right-0.5 -top-0.5 h-4 w-4 rounded-full border-2 border-white bg-green-500 animate-pulse" />
+        </div>
+        <div className="hidden sm:block text-left">
+          <p className="text-sm font-semibold text-slate-900">{t.chatbotTitle}</p>
+        </div>
       </button>
 
       {/* Chat Window */}
@@ -83,8 +153,7 @@ const FixiChatbot = () => {
                   className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
                 />
                 <div>
-                  <h3 className="font-semibold text-slate-900">Fixi AI</h3>
-                  <p className="text-xs text-slate-500">Civic reporting assistant</p>
+                  <h3 className="font-semibold text-slate-900">{t.chatbotTitle}</h3>
                 </div>
               </div>
               <Button 
@@ -157,11 +226,21 @@ const FixiChatbot = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask about reports, categories, maps..."
+                placeholder={t.chatbotPlaceholder}
                 className="flex-1 rounded-full border-slate-200 bg-slate-50 focus:border-slate-400"
                 disabled={loading}
                 data-testid="fixi-input"
               />
+              <Button
+                onClick={toggleVoiceInput}
+                type="button"
+                variant="outline"
+                className={`h-10 w-10 rounded-full p-0 ${isRecording ? "border-red-200 bg-red-50 text-red-600 hover:bg-red-100" : ""}`}
+                disabled={loading}
+                title={isRecording ? "Stop recording" : "Use voice input"}
+              >
+                {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </Button>
               <Button 
                 onClick={sendMessage}
                 disabled={loading || !input.trim()}

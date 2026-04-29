@@ -10,7 +10,7 @@ import { Checkbox } from "../components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Shield, Users, Calendar, Plus, Check, X, Loader2, FileText, Link2, ClipboardList, Sparkles } from "lucide-react";
+import { Shield, Users, Calendar, Plus, Check, X, Loader2, FileText, Link2, ClipboardList, Sparkles, KeyRound, Search } from "lucide-react";
 import { toast } from "sonner";
 
 const reportStatuses = ["Needs Review", "Open", "Under Review", "In Progress", "Fixed"];
@@ -28,13 +28,15 @@ const urgencyStyles = {
 };
 
 const ModeratorPanel = () => {
-  const { api } = useAuth();
+  const { api, user } = useAuth();
   const [requests, setRequests] = useState([]);
   const [events, setEvents] = useState([]);
   const [reports, setReports] = useState([]);
   const [pendingPosts, setPendingPosts] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
+  const [userSearch, setUserSearch] = useState("");
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [reportStatusDrafts, setReportStatusDrafts] = useState({});
   const [reportNotes, setReportNotes] = useState({});
@@ -44,16 +46,18 @@ const ModeratorPanel = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [reqRes, eventsRes, postsRes, reportsRes] = await Promise.all([
+      const [reqRes, eventsRes, postsRes, reportsRes, usersRes] = await Promise.all([
         api.get("/community/membership-requests"),
         api.get("/events"),
         api.get("/community/posts/pending"),
-        api.get("/reports?limit=100")
+        api.get("/reports?limit=100"),
+        api.get("/moderation/users")
       ]);
       setRequests(reqRes.data);
       setEvents(eventsRes.data);
       setPendingPosts(postsRes.data);
       setReports(reportsRes.data || []);
+      setUsers(usersRes.data || []);
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -136,6 +140,19 @@ const ModeratorPanel = () => {
     }
   };
 
+  const handleUpdateUserRole = async (targetUser, nextRole) => {
+    setActionLoading(`role-${targetUser.id}`);
+    try {
+      const response = await api.post(`/moderation/users/${targetUser.id}/role`, { role: nextRole });
+      setUsers((prev) => prev.map((item) => (item.id === targetUser.id ? response.data : item)));
+      toast.success(`${targetUser.full_name} is now ${nextRole}`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to update access");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleUpdateReportStatus = async (report) => {
     const nextStatus = reportStatusDrafts[report.id] || report.status;
     const note = reportNotes[report.id] || "";
@@ -161,6 +178,15 @@ const ModeratorPanel = () => {
         (a.ai_confidence ?? 1) - (b.ai_confidence ?? 1)
       );
     });
+
+  const visibleUsers = users.filter((account) => {
+    const query = userSearch.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      account.full_name?.toLowerCase().includes(query) ||
+      account.email?.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -194,6 +220,10 @@ const ModeratorPanel = () => {
               <FileText className="w-4 h-4" />
               Posts
               {pendingPosts.length > 0 && <Badge className="ml-1">{pendingPosts.length}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="access" className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4" />
+              Team Access
             </TabsTrigger>
           </TabsList>
 
@@ -463,6 +493,88 @@ const ModeratorPanel = () => {
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="access">
+            <Card className="border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle>Moderator Access</CardTitle>
+                <p className="text-sm text-slate-600">
+                  Give trusted colleagues moderator permission on their own accounts instead of sharing one login.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="relative mb-5">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    placeholder="Search people by name or email..."
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="space-y-4">
+                  {visibleUsers.map((account) => {
+                    const isSelf = account.id === user?.id;
+                    const isModerator = account.role === "moderator";
+                    return (
+                      <div key={account.id} className="flex flex-col gap-4 rounded-xl border border-slate-200 p-4 md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-3">
+                          {account.avatar_base64 ? (
+                            <img
+                              src={`data:image/jpeg;base64,${account.avatar_base64}`}
+                              alt={account.full_name}
+                              className="h-12 w-12 rounded-full object-cover ring-2 ring-white shadow-sm"
+                            />
+                          ) : (
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-sm font-semibold text-white">
+                              {account.full_name?.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-medium text-slate-900">{account.full_name}</p>
+                            <p className="text-sm text-slate-500">{account.email}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Badge variant={isModerator ? "default" : "secondary"}>
+                                {isModerator ? "Moderator" : "User"}
+                              </Badge>
+                              {account.is_community_member && (
+                                <Badge className="bg-green-100 text-green-700">Community Member</Badge>
+                              )}
+                              {isSelf && (
+                                <Badge className="bg-indigo-100 text-indigo-700">You</Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {isModerator ? (
+                            <Button
+                              variant="outline"
+                              onClick={() => handleUpdateUserRole(account, "user")}
+                              disabled={isSelf || actionLoading === `role-${account.id}`}
+                            >
+                              {actionLoading === `role-${account.id}` ? "Updating..." : "Remove Moderator"}
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() => handleUpdateUserRole(account, "moderator")}
+                              disabled={actionLoading === `role-${account.id}`}
+                              className="bg-indigo-600 hover:bg-indigo-700"
+                            >
+                              {actionLoading === `role-${account.id}` ? "Updating..." : "Grant Moderator"}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {visibleUsers.length === 0 && (
+                    <p className="py-6 text-center text-slate-500">No matching users found.</p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
