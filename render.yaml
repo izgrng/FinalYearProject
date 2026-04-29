@@ -26,6 +26,8 @@ services:
         value: openrouter/free
       - key: CLIP_MODEL_NAME
         value: openai/clip-vit-base-patch32
+      - key: ENABLE_CLIP_IMAGE_ANALYSIS
+        value: "false"
       - key: OPENROUTER_REFERER
         sync: false
       - key: OPENROUTER_TITLE

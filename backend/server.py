@@ -36,6 +36,7 @@ OPENROUTER_CHAT_MODEL = os.environ.get("OPENROUTER_CHAT_MODEL", "openrouter/free
 OPENROUTER_CATEGORY_MODEL = os.environ.get("OPENROUTER_CATEGORY_MODEL", "openrouter/free").strip()
 OPENROUTER_VISION_MODEL = os.environ.get("OPENROUTER_VISION_MODEL", "openrouter/free").strip()
 CLIP_MODEL_NAME = os.environ.get("CLIP_MODEL_NAME", "openai/clip-vit-base-patch32").strip()
+ENABLE_CLIP_IMAGE_ANALYSIS = os.environ.get("ENABLE_CLIP_IMAGE_ANALYSIS", "true").strip().lower() in {"1", "true", "yes", "on"}
 OPENROUTER_REFERER = os.environ.get("OPENROUTER_REFERER", "http://localhost:3000").strip()
 OPENROUTER_TITLE = os.environ.get("OPENROUTER_TITLE", "Fixify").strip()
 CATEGORY_OPTIONS = [
@@ -488,6 +489,8 @@ async def call_openrouter_completion(messages: List[dict], model: str, temperatu
 
 def get_clip_classifier():
     global _clip_classifier
+    if not ENABLE_CLIP_IMAGE_ANALYSIS:
+        return None
     if _clip_classifier is not None:
         return _clip_classifier
     if pipeline is None:
