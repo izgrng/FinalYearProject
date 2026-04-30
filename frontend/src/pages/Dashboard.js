@@ -221,6 +221,14 @@ const Dashboard = () => {
     [stats]
   );
 
+  const topPlace = useMemo(() => {
+    const spots = stats?.hotspots || [];
+    if (!spots.length) return null;
+    return spots
+      .filter((spot) => spot?.location)
+      .sort((a, b) => b.count - a.count)[0] || null;
+  }, [stats]);
+
   const summaryCards = [
     {
       label: "Total Reports",
@@ -263,6 +271,13 @@ const Dashboard = () => {
       note: topCategory ? "Highest number of submitted reports" : "Category trend appears once data loads",
       icon: <ClipboardList className="h-5 w-5 text-cyan-600" />,
       shell: "bg-cyan-50",
+    },
+    {
+      label: topPlace?.location || "Top Place",
+      value: topPlace?.count || 0,
+      note: topPlace ? "Location with the highest number of submitted reports" : "Place trends appear once data loads",
+      icon: <MapPin className="h-5 w-5 text-rose-600" />,
+      shell: "bg-rose-50",
     },
   ];
 
@@ -477,7 +492,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {summaryCards.map((card) => (
                 <Card key={card.label} className="border-slate-200 shadow-sm dark:border-[#d7e5e3] dark:bg-white">
                   <CardContent className="flex items-start justify-between p-5">

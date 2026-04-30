@@ -349,7 +349,7 @@ const Home = () => {
           <div className="text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 shadow-sm dark:border-slate-700 dark:bg-slate-950 dark:text-cyan-200">
               <Sparkles className="h-4 w-4" />
-              What is this page for?
+              Why Fixify?
             </div>
             <h2 className="mt-6 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
               Clear value for people who want more than a complaint box
@@ -511,14 +511,14 @@ const Home = () => {
       <section className="bg-[#F4FBF9] py-16 transition-colors dark:bg-slate-900">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="grid items-center gap-8 rounded-[30px] border border-[#D7ECE7] bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-950 md:grid-cols-[0.25fr_1fr]">
-            <div className="mx-auto flex h-36 w-full max-w-[170px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 text-center text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500">
-              Creator photo
-              <br />
-              placeholder
+            <div className="mx-auto flex h-36 w-full max-w-[170px] items-center justify-center rounded-[24px] border border-[#D7ECE7] bg-gradient-to-br from-slate-950 via-[#0c2440] to-[#0F766E] shadow-sm">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/15 bg-white/10 text-4xl font-semibold text-white shadow-lg backdrop-blur-sm">
+                I
+              </div>
             </div>
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-indigo-600 dark:text-cyan-300">Project creator</p>
-              <h2 className="mt-3 text-3xl font-semibold text-slate-900 dark:text-white">Created by Ishma</h2>
+              <h2 className="mt-3 text-2xl font-semibold text-slate-900 dark:text-white">Created by Ishma</h2>
               <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-300">
                 Fixify was built as a final-year project inspired by local civic issues and the need for a clearer, more community-focused way to report and track them.
               </p>

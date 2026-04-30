@@ -741,17 +741,27 @@ async def fixi_chat_conversational(message: str, session_id: str) -> str:
 
     if any(phrase in text for phrase in ["how are you", "how are you doing", "how do you do"]):
         return (
-            "I'm doing well, thanks. Happy to chat a bit, share awareness tips, or help you use Fixify."
+            "I'm doing well, thanks. I'm here to chat, share awareness tips, or help with anything inside Fixify."
+        )
+
+    if any(phrase in text for phrase in ["are you okay", "you okay", "are you alright", "you alright", "how's it going", "hows it going", "what's up", "whats up"]):
+        return (
+            "I'm okay, thanks for asking. I'm here and ready to chat or help with anything you want to explore."
         )
 
     if any(greet in text for greet in ["hi", "hello", "hey", "namaste"]):
         return (
-            "Hi! I'm Fixi. I can chat naturally, give civic awareness tips, and help you around Fixify whenever you want."
+            "Hi! I'm Fixi. Happy to chat naturally, share awareness tips, or help you around the platform."
         )
 
     if any(phrase in text for phrase in ["who are you", "what are you", "what can you do"]):
         return (
-            "I'm Fixi, the assistant inside Fixify. I can talk with you casually, share civic awareness ideas, and help with reports, maps, the dashboard, and community features."
+            "I'm Fixi, the assistant inside Fixify. I can chat casually, answer questions, share civic awareness ideas, and help with reports, maps, the dashboard, and community features."
+        )
+
+    if any(phrase in text for phrase in ["do you know me", "who am i", "do you remember me"]):
+        return (
+            "Not in a personal sense. I only know what you've shared in this chat and the basic account context available inside Fixify."
         )
 
     if any(phrase in text for phrase in ["awareness", "tip", "tips", "advice", "what should people know"]):
@@ -812,7 +822,7 @@ async def call_openai_chat(messages: List[dict]) -> Optional[str]:
     payload = {
         "model": OPENAI_CHAT_MODEL,
         "messages": messages,
-        "temperature": 0.5,
+        "temperature": 0.7,
     }
 
     try:
@@ -878,13 +888,16 @@ async def fixi_chat_ai(message: str, session_id: str, user: dict, history: Optio
             "role": "system",
             "content": (
                 "You are Fixi, the assistant inside the Fixify platform. "
-                "Talk in a natural, warm, casual, human way, similar to a friendly ChatGPT-style assistant. "
-                "You can handle normal conversation, greetings, emotional check-ins, light small talk, civic awareness tips, "
-                "and platform guidance. "
-                "When the user asks a normal conversational question, answer it directly and naturally instead of forcing the reply back to the app. "
-                "When the user asks about Fixify features, explain them clearly and simply. "
-                "You may gently connect back to Fixify when it feels relevant, but do not sound robotic or repetitive. "
-                "Keep replies fairly concise, helpful, and easy to read. "
+                "Reply in a natural, warm, emotionally aware, human way, similar to a friendly everyday ChatGPT conversation. "
+                "Focus on answering what the user actually means, even if they phrase it casually, indirectly, or in different wording. "
+                "When the user asks a normal conversational question, answer it directly first. "
+                "When they ask something personal like 'do you know me', be honest that you only know what is available in this chat and limited in-app context. "
+                "When they ask about Fixify, reports, maps, moderation, or community features, explain those clearly and simply. "
+                "You can also give civic awareness tips, practical suggestions, and light guidance. "
+                "Do not drag every reply back to the app if the user is just chatting. "
+                "Mirror the user's tone gently without sounding fake or overly formal. "
+                "Prefer short to medium replies that feel thoughtful and natural. "
+                "Use plain language, and add structure only when it genuinely helps. "
                 "Do not invent features the platform does not support."
             ),
         },
@@ -894,12 +907,13 @@ async def fixi_chat_ai(message: str, session_id: str, user: dict, history: Optio
                 f"User name: {user.get('full_name', 'Unknown')}. "
                 f"User role: {user.get('role', 'user')}. "
                 f"Community member: {user.get('is_community_member', False)}. "
-                f"Session id: {session_id}."
+                f"Session id: {session_id}. "
+                "Only use this account context when it is relevant. Do not pretend to know private facts beyond it."
             ),
         },
     ]
 
-    for turn in (history or [])[-6:]:
+    for turn in (history or [])[-12:]:
         role = turn.role if turn.role in {"user", "assistant"} else ("assistant" if turn.role == "bot" else "user")
         content = (turn.content or "").strip()
         if content:
