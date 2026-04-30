@@ -19,7 +19,7 @@ const translations = {
     heroPrimary: "Create Free Account",
     heroPrimaryLoggedIn: "Report an Issue",
     heroSecondary: "Explore Dashboard",
-    homeWhy: "Why the homepage should feel more useful",
+    homeWhy: "Why Fixify?",
     homeHow: "How it works",
     chatbotGreeting:
       "Hi! I'm Fixi, your friendly AI assistant. How can I help you today? I can guide you on reporting issues, explain how Fixify works, or share civic awareness tips!",
@@ -43,7 +43,7 @@ const translations = {
     heroPrimary: "निःशुल्क खाता बनाउनुहोस्",
     heroPrimaryLoggedIn: "समस्या रिपोर्ट गर्नुहोस्",
     heroSecondary: "ड्यासबोर्ड हेर्नुहोस्",
-    homeWhy: "यो गृहपृष्ठ अझ उपयोगी किन देखिनुपर्छ",
+    homeWhy: "किन Fixify?",
     homeHow: "कसरी काम गर्छ",
     chatbotGreeting:
       "नमस्ते! म Fixi हुँ, तपाईंको AI सहयोगी। म तपाईंलाई समस्या रिपोर्ट गर्न, Fixify कसरी काम गर्छ भन्ने बुझाउन, वा नागरिक सचेतनाबारे जानकारी दिन सक्छु।",
