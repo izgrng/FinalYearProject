@@ -183,7 +183,7 @@ const Profile = () => {
                     {user?.email}
                   </span>
                   <Badge variant={user?.role === "moderator" ? "default" : "secondary"}>
-                    {user?.role === "moderator" ? "Moderator" : "Member"}
+                    {user?.role === "moderator" ? "Moderator" : "User"}
                   </Badge>
                   {user?.is_community_member && (
                     <Badge className="bg-green-100 text-green-700">Community Member</Badge>

@@ -62,7 +62,7 @@ const PublicProfile = () => {
               <div>
                 <h1 className="text-2xl font-bold text-slate-900 font-[Manrope]">{user.full_name}</h1>
                 <div className="mt-2 flex items-center gap-3 text-slate-600">
-                  <Badge variant="secondary">{user.role === "moderator" ? "Moderator" : "Member"}</Badge>
+                  <Badge variant="secondary">{user.role === "moderator" ? "Moderator" : "User"}</Badge>
                   {user.is_community_member && (
                     <Badge className="bg-green-100 text-green-700">Community Member</Badge>
                   )}
