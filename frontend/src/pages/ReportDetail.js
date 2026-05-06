@@ -69,6 +69,15 @@ const ReportDetail = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {report.image_url && (
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <img
+                  src={report.image_url}
+                  alt={report.title}
+                  className="h-auto max-h-[420px] w-full object-cover"
+                />
+              </div>
+            )}
             <p className="text-slate-700">{report.description}</p>
             <div className="flex flex-wrap gap-2">
               {report.ai_source && <Badge variant="outline">AI: {report.ai_source}</Badge>}

@@ -28,7 +28,7 @@ except Exception:
     pipeline = None
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / '.env', override=True)
 MODEL_PATH = ROOT_DIR / "ml" / "model.joblib"
 _ml_model = None
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
@@ -37,6 +37,12 @@ OPENROUTER_CATEGORY_MODEL = os.environ.get("OPENROUTER_CATEGORY_MODEL", "openrou
 OPENROUTER_VISION_MODEL = os.environ.get("OPENROUTER_VISION_MODEL", "openrouter/free").strip()
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 OPENAI_CHAT_MODEL = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini").strip()
+CHAT_MAX_TOKENS = int(os.environ.get("CHAT_MAX_TOKENS", "500"))
+CHAT_PROVIDER_ORDER = [
+    provider.strip().lower()
+    for provider in os.environ.get("CHAT_PROVIDER_ORDER", "openrouter,openai").split(",")
+    if provider.strip()
+]
 CLIP_MODEL_NAME = os.environ.get("CLIP_MODEL_NAME", "openai/clip-vit-base-patch32").strip()
 ENABLE_CLIP_IMAGE_ANALYSIS = os.environ.get("ENABLE_CLIP_IMAGE_ANALYSIS", "true").strip().lower() in {"1", "true", "yes", "on"}
 OPENROUTER_REFERER = os.environ.get("OPENROUTER_REFERER", "http://localhost:3000").strip()
@@ -60,6 +66,14 @@ REPORT_STATUS_OPTIONS = [
 ]
 URGENCY_ORDER = {"high": 3, "medium": 2, "low": 1}
 _clip_classifier = None
+
+
+def has_configured_api_key(value: str) -> bool:
+    cleaned = (value or "").strip().strip('"').strip("'")
+    if not cleaned:
+        return False
+    placeholder_markers = {"your_", "replace-", "sk-your", "example", "placeholder"}
+    return not any(marker in cleaned.lower() for marker in placeholder_markers)
 
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL')
@@ -221,6 +235,13 @@ def to_data_url(image_base64: Optional[str]) -> Optional[str]:
     if not image_base64:
         return None
     return f"data:image/jpeg;base64,{image_base64}"
+
+def serialize_report(report: Optional[dict]) -> Optional[dict]:
+    if not report:
+        return None
+    serialized = dict(report)
+    serialized["image_url"] = to_data_url(serialized.get("image_base64"))
+    return serialized
 
 def ensure_valid_email(email: str) -> str:
     email = email.strip().lower()
@@ -687,98 +708,47 @@ async def categorize_report(title: str, description: str, image_analysis: str = 
         "source": "rules",
     }
 
-async def fixi_chat(message: str, session_id: str) -> str:
-    """Fixi chatbot for user guidance (rule-based)."""
-    text = message.lower().strip()
-
-    if any(greet in text for greet in ["hi", "hello", "hey", "namaste"]):
-        return "Hi! I’m Fixi. I can help you report issues, explain categories, and guide you around Fixify."
-
-    if "report" in text or "issue" in text:
-        return (
-            "To report an issue: go to Report Issue, add a title and description, "
-            "drop a pin on the map, and submit. You can optionally add a photo."
-        )
-
-    if "category" in text or "type" in text:
-        return (
-            "Categories include Waste, Road, Water, Safety, Infrastructure, Environment, and Other. "
-            "Pick the closest match to your issue."
-        )
-
-    if "community" in text or "event" in text:
-        return (
-            "Community Hub lets you view events and request membership. "
-            "A moderator approves membership requests."
-        )
-
-    if "location" in text or "map" in text:
-        return (
-            "Use the map to select the exact location. You can also click 'Use My Location' "
-            "to auto-set your current position."
-        )
-
-    if "moderator" in text:
-        return (
-            "Moderators can approve membership requests and create events. "
-            "Use the Moderator Panel after logging in as a moderator."
-        )
-
-    if "login" in text or "sign in" in text or "signup" in text:
-        return (
-            "You can create an account on the Sign Up page, then log in from the Login page. "
-            "After logging in, you can submit reports and access the dashboard."
-        )
-
+def fixi_chat_service_unavailable() -> str:
     return (
-        "I can help with reporting issues, categories, maps, community hub, and moderator actions. "
-        "Tell me what you’d like to do."
+        "I'm having trouble reaching my AI service right now, so I can't give a proper Fixi response at the moment. "
+        "Please try again in a moment."
     )
 
-async def fixi_chat_conversational(message: str, session_id: str) -> str:
-    """More natural fallback for everyday conversation, awareness, and guidance."""
-    text = message.lower().strip()
 
-    if any(phrase in text for phrase in ["how are you", "how are you doing", "how do you do"]):
-        return (
-            "I'm doing well, thanks. I'm here to chat, share awareness tips, or help with anything inside Fixify."
-        )
+def extract_chat_response_text(data: dict) -> Optional[str]:
+    choices = data.get("choices", [])
+    if not choices:
+        return None
+    content = choices[0].get("message", {}).get("content")
+    if isinstance(content, str):
+        return content.strip() or None
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") in {"text", "output_text"}:
+                parts.append(str(item.get("text", "")))
+        joined = "".join(parts).strip()
+        return joined or None
+    return None
 
-    if any(phrase in text for phrase in ["are you okay", "you okay", "are you alright", "you alright", "how's it going", "hows it going", "what's up", "whats up"]):
-        return (
-            "I'm okay, thanks for asking. I'm here and ready to chat or help with anything you want to explore."
-        )
 
-    if any(greet in text for greet in ["hi", "hello", "hey", "namaste"]):
-        return (
-            "Hi! I'm Fixi. Happy to chat naturally, share awareness tips, or help you around the platform."
-        )
+def compact_chat_messages(messages: List[dict]) -> List[dict]:
+    system_text = " ".join(
+        str(message.get("content", "")).strip()
+        for message in messages
+        if message.get("role") == "system" and str(message.get("content", "")).strip()
+    )
+    compacted = []
+    if system_text:
+        compacted.append({"role": "system", "content": system_text})
+    compacted.extend(message for message in messages if message.get("role") != "system")
+    return compacted[-14:]
 
-    if any(phrase in text for phrase in ["who are you", "what are you", "what can you do"]):
-        return (
-            "I'm Fixi, the assistant inside Fixify. I can chat casually, answer questions, share civic awareness ideas, and help with reports, maps, the dashboard, and community features."
-        )
-
-    if any(phrase in text for phrase in ["do you know me", "who am i", "do you remember me"]):
-        return (
-            "Not in a personal sense. I only know what you've shared in this chat and the basic account context available inside Fixify."
-        )
-
-    if any(phrase in text for phrase in ["awareness", "tip", "tips", "advice", "what should people know"]):
-        return (
-            "A good awareness tip is to report local issues early and clearly. A short description, the right location, and a helpful photo can make a big difference."
-        )
-
-    if any(phrase in text for phrase in ["fine", "good", "okay", "ok", "thanks", "thank you"]):
-        return (
-            "Glad to hear that. If you want, we can keep chatting, or I can help with reports, awareness tips, or anything inside Fixify."
-        )
-
-    return await fixi_chat(message, session_id)
 
 async def call_openrouter_chat(messages: List[dict]) -> Optional[str]:
     """Call OpenRouter chat completions API and return the first text response."""
-    if not OPENROUTER_API_KEY:
+    if not has_configured_api_key(OPENROUTER_API_KEY):
+        logger.warning("OpenRouter chat skipped: OPENROUTER_API_KEY is missing or looks like a placeholder")
         return None
 
     headers = {
@@ -791,6 +761,8 @@ async def call_openrouter_chat(messages: List[dict]) -> Optional[str]:
         "model": OPENROUTER_CHAT_MODEL,
         "messages": messages,
         "temperature": 0.3,
+        "max_completion_tokens": CHAT_MAX_TOKENS,
+        "modalities": ["text"],
     }
 
     try:
@@ -802,17 +774,33 @@ async def call_openrouter_chat(messages: List[dict]) -> Optional[str]:
             )
             response.raise_for_status()
             data = response.json()
-            choices = data.get("choices", [])
-            if not choices:
-                return None
-            return choices[0].get("message", {}).get("content")
+            content = extract_chat_response_text(data)
+            if content:
+                return content
+            logger.warning(f"OpenRouter chat returned no text content: {json.dumps(data)[:500]}")
+            retry_payload = {**payload, "messages": compact_chat_messages(messages)}
+            retry_response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=retry_payload,
+            )
+            retry_response.raise_for_status()
+            retry_data = retry_response.json()
+            retry_content = extract_chat_response_text(retry_data)
+            if not retry_content:
+                logger.warning(f"OpenRouter chat retry returned no text content: {json.dumps(retry_data)[:500]}")
+            return retry_content
+    except httpx.HTTPStatusError as e:
+        logger.error(f"OpenRouter chat HTTP {e.response.status_code}: {e.response.text[:500]}")
+        return None
     except Exception as e:
-        logger.error(f"OpenRouter chat error: {e}")
+        logger.error(f"OpenRouter chat error: {type(e).__name__}: {e}")
         return None
 
 async def call_openai_chat(messages: List[dict]) -> Optional[str]:
     """Call OpenAI chat completions API and return the first text response."""
-    if not OPENAI_API_KEY:
+    if not has_configured_api_key(OPENAI_API_KEY):
+        logger.warning("OpenAI chat skipped: OPENAI_API_KEY is missing or looks like a placeholder")
         return None
 
     headers = {
@@ -823,6 +811,7 @@ async def call_openai_chat(messages: List[dict]) -> Optional[str]:
         "model": OPENAI_CHAT_MODEL,
         "messages": messages,
         "temperature": 0.7,
+        "max_completion_tokens": CHAT_MAX_TOKENS,
     }
 
     try:
@@ -834,13 +823,41 @@ async def call_openai_chat(messages: List[dict]) -> Optional[str]:
             )
             response.raise_for_status()
             data = response.json()
-            choices = data.get("choices", [])
-            if not choices:
-                return None
-            return choices[0].get("message", {}).get("content")
-    except Exception as e:
-        logger.error(f"OpenAI chat error: {e}")
+            return extract_chat_response_text(data)
+    except httpx.HTTPStatusError as e:
+        logger.error(f"OpenAI chat HTTP {e.response.status_code}: {e.response.text[:500]}")
         return None
+    except Exception as e:
+        logger.error(f"OpenAI chat error: {type(e).__name__}: {e}")
+        return None
+
+async def call_chat_provider(provider: str, messages: List[dict]) -> Optional[str]:
+    if provider == "openai":
+        return await call_openai_chat(messages)
+    if provider == "openrouter":
+        return await call_openrouter_chat(messages)
+    logger.warning(f"Unknown chat provider in CHAT_PROVIDER_ORDER: {provider}")
+    return None
+
+def default_chat_suggestions(message: str = "") -> List[str]:
+    text = (message or "").lower()
+    if any(word in text for word in ["category", "categories"]):
+        return [
+            "Which category fits road damage best?",
+            "How does Fixify decide issue categories?",
+            "Can the AI category be changed later?",
+        ]
+    if any(word in text for word in ["report", "issue", "submit"]):
+        return [
+            "What details make a report more useful?",
+            "Can I report an issue using a photo only?",
+            "How do I pin the exact location?",
+        ]
+    return [
+        "How do I report an issue?",
+        "How do I choose the right issue category?",
+        "Give me a civic awareness tip",
+    ]
 
 def build_fixi_suggestions(message: str, response: str) -> List[str]:
     text = f"{message} {response}".lower()
@@ -881,8 +898,28 @@ def build_fixi_suggestions(message: str, response: str) -> List[str]:
         "What can I do in the community hub?",
     ]
 
+
+def infer_chat_topic(message: str) -> str:
+    text = (message or "").lower()
+    if any(word in text for word in ["report", "issue", "submit", "complaint"]):
+        return "report guidance"
+    if any(word in text for word in ["category", "classify", "type"]):
+        return "category help"
+    if any(word in text for word in ["map", "location", "pin", "nearby"]):
+        return "map and location"
+    if any(word in text for word in ["community", "event", "volunteer", "hub"]):
+        return "community hub"
+    if any(word in text for word in ["photo", "image", "picture", "upload"]):
+        return "photo support"
+    if any(word in text for word in ["tip", "awareness", "safety", "advice"]):
+        return "civic awareness"
+    if any(word in text for word in ["hi", "hello", "hey", "thanks", "thank you", "how are"]):
+        return "general conversation"
+    return "general support"
+
+
 async def fixi_chat_ai(message: str, session_id: str, user: dict, history: Optional[List[ChatTurn]] = None) -> dict:
-    """Conversational Fixi assistant powered by OpenAI first, then fallback providers."""
+    """LLM-driven Fixi assistant powered by OpenAI first, then OpenRouter."""
     messages = [
         {
             "role": "system",
@@ -898,6 +935,9 @@ async def fixi_chat_ai(message: str, session_id: str, user: dict, history: Optio
                 "Mirror the user's tone gently without sounding fake or overly formal. "
                 "Prefer short to medium replies that feel thoughtful and natural. "
                 "Use plain language, and add structure only when it genuinely helps. "
+                "Do not answer with generic canned helpdesk wording. "
+                "If the user asks a direct question, answer that exact question clearly. "
+                "If they ask about issue categories, explain the category choice instead of switching to generic reporting instructions. "
                 "Do not invent features the platform does not support."
             ),
         },
@@ -921,18 +961,14 @@ async def fixi_chat_ai(message: str, session_id: str, user: dict, history: Optio
 
     messages.append({"role": "user", "content": message})
 
-    ai_response = await call_openai_chat(messages)
-    if ai_response:
-        reply = ai_response.strip()
-        return {"reply": reply, "suggestions": build_fixi_suggestions(message, reply)}
+    provider_order = CHAT_PROVIDER_ORDER or ["openrouter", "openai"]
+    for provider in provider_order:
+        ai_response = await call_chat_provider(provider, messages)
+        if ai_response:
+            return {"reply": ai_response, "suggestions": build_fixi_suggestions(message, ai_response)}
 
-    ai_response = await call_openrouter_chat(messages)
-    if ai_response:
-        reply = ai_response.strip()
-        return {"reply": reply, "suggestions": build_fixi_suggestions(message, reply)}
-
-    fallback = await fixi_chat_conversational(message, session_id)
-    return {"reply": fallback, "suggestions": build_fixi_suggestions(message, fallback)}
+    fallback = fixi_chat_service_unavailable()
+    return {"reply": fallback, "suggestions": default_chat_suggestions(message)}
 
 # ==================== AUTH ENDPOINTS ====================
 
@@ -1100,7 +1136,6 @@ async def create_report(report_data: ReportCreate, user: dict = Depends(get_curr
         )
 
     image_analysis = ""
-    image_url = None
     
     # Analyze image if provided
     if report_data.image_base64:
@@ -1108,8 +1143,6 @@ async def create_report(report_data: ReportCreate, user: dict = Depends(get_curr
         if not analysis.get("is_valid", True):
             raise HTTPException(status_code=400, detail=f"Image rejected: {analysis.get('reason', 'Not a valid problem report')}")
         image_analysis = analysis.get("detected_issue", "")
-        # Store base64 as data URL for simplicity
-        image_url = f"data:image/jpeg;base64,{report_data.image_base64[:100]}..."  # Truncate for storage
     
     # AI categorization
     category_result = await categorize_report(raw_title, raw_description, image_analysis)
@@ -1208,7 +1241,7 @@ async def create_report(report_data: ReportCreate, user: dict = Depends(get_curr
     }
     await db.reports.insert_one(report_doc)
     
-    return {
+    response_doc = {
         "id": report_id,
         "title": title,
         "description": description,
@@ -1236,6 +1269,8 @@ async def create_report(report_data: ReportCreate, user: dict = Depends(get_curr
             + (f" and flagged as a possible duplicate of report {duplicate_of}" if duplicate_of else "")
         )
     }
+    response_doc["image_url"] = to_data_url(report_doc.get("image_base64"))
+    return response_doc
 
 @api_router.get("/reports")
 async def get_reports(
@@ -1253,14 +1288,14 @@ async def get_reports(
         query["location_name"] = {"$regex": location, "$options": "i"}
     
     reports = await db.reports.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
-    return reports
+    return [serialize_report(report) for report in reports]
 
 @api_router.get("/reports/{report_id}")
 async def get_report(report_id: str):
     report = await db.reports.find_one({"id": report_id}, {"_id": 0})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    return report
+    return serialize_report(report)
 
 @api_router.put("/reports/{report_id}")
 async def update_report(report_id: str, update: ReportUpdate, user: dict = Depends(get_current_user)):
@@ -1311,7 +1346,7 @@ async def update_report(report_id: str, update: ReportUpdate, user: dict = Depen
         await db.reports.update_one({"id": report_id}, {"$set": updates})
 
     updated = await db.reports.find_one({"id": report_id}, {"_id": 0})
-    return updated
+    return serialize_report(updated)
 
 @api_router.post("/reports/{report_id}/status")
 async def update_report_status(
@@ -1362,7 +1397,7 @@ async def update_report_status(
             "read": False,
         })
 
-    return await db.reports.find_one({"id": report_id}, {"_id": 0})
+    return serialize_report(await db.reports.find_one({"id": report_id}, {"_id": 0}))
 
 @api_router.delete("/reports/{report_id}")
 async def delete_report(report_id: str, user: dict = Depends(get_current_user)):
@@ -1448,12 +1483,12 @@ async def upvote_report(report_id: str, user: dict = Depends(get_current_user)):
 @api_router.get("/reports/user/mine")
 async def get_my_reports(user: dict = Depends(get_current_user)):
     reports = await db.reports.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return reports
+    return [serialize_report(report) for report in reports]
 
 @api_router.get("/reports/user/{user_id}")
 async def get_user_reports(user_id: str):
     reports = await db.reports.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return reports
+    return [serialize_report(report) for report in reports]
 
 @api_router.get("/notifications")
 async def get_notifications(user: dict = Depends(get_current_user)):
@@ -1573,6 +1608,29 @@ async def get_dashboard_stats():
         for day in last_seven_days
     ]
 
+    chat_total = await db.chat_history.count_documents({})
+    chat_completed = await db.chat_history.count_documents({"status": {"$in": ["completed", None]}})
+    chat_pending = await db.chat_history.count_documents({"status": "pending"})
+    chat_this_week = await db.chat_history.count_documents({"created_at": {"$gte": week_ago}})
+    chat_topic_raw = await db.chat_history.aggregate([
+        {"$group": {"_id": {"$ifNull": ["$topic", "older chat"]}, "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 6},
+    ]).to_list(6)
+    recent_chats = await db.chat_history.find(
+        {},
+        {
+            "_id": 0,
+            "id": 1,
+            "user_name": 1,
+            "user_message": 1,
+            "bot_response": 1,
+            "topic": 1,
+            "status": 1,
+            "created_at": 1,
+        },
+    ).sort("created_at", -1).limit(5).to_list(5)
+
     return {
         "total_reports": total,
         "open_reports": open_count,
@@ -1587,6 +1645,14 @@ async def get_dashboard_stats():
         "hotspots": [{"location": h["_id"], "count": h["count"]} for h in hotspots],
         "review_queue": review_queue,
         "trend": trend,
+        "chat": {
+            "total": chat_total,
+            "completed": chat_completed,
+            "pending": chat_pending,
+            "this_week": chat_this_week,
+            "topics": [{"topic": item["_id"], "count": item["count"]} for item in chat_topic_raw],
+            "recent": recent_chats,
+        },
     }
 
 # ==================== COMMUNITY HUB ====================
@@ -1909,19 +1975,37 @@ async def reject_post(post_id: str, user: dict = Depends(get_moderator)):
 @api_router.post("/chat")
 async def chat_with_fixi(chat_data: ChatMessage, user: dict = Depends(get_current_user)):
     session_id = chat_data.session_id or f"fixi-{user['id']}"
-    response_payload = await fixi_chat_ai(chat_data.message, session_id, user, chat_data.history)
-    response_text = response_payload["reply"]
-    
-    # Store chat history
     chat_doc = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
+        "user_name": user.get("full_name"),
         "session_id": session_id,
         "user_message": chat_data.message,
-        "bot_response": response_text,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "bot_response": None,
+        "topic": infer_chat_topic(chat_data.message),
+        "assistant": "Fixi AI",
+        "ai_provider_order": CHAT_PROVIDER_ORDER or ["openrouter", "openai"],
+        "chat_model": OPENROUTER_CHAT_MODEL if (CHAT_PROVIDER_ORDER or ["openrouter"])[0] == "openrouter" else OPENAI_CHAT_MODEL,
+        "history_turns": len(chat_data.history or []),
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.chat_history.insert_one(chat_doc)
+
+    response_payload = await fixi_chat_ai(chat_data.message, session_id, user, chat_data.history)
+    response_text = response_payload["reply"]
+
+    await db.chat_history.update_one(
+        {"id": chat_doc["id"]},
+        {
+            "$set": {
+                "bot_response": response_text,
+                "status": "completed",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
     
     return {
         "response": response_text,

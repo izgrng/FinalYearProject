@@ -229,6 +229,9 @@ const Dashboard = () => {
       .sort((a, b) => b.count - a.count)[0] || null;
   }, [stats]);
 
+  const chatTopics = useMemo(() => stats?.chat?.topics || [], [stats]);
+  const recentChats = useMemo(() => stats?.chat?.recent || [], [stats]);
+
   const summaryCards = [
     {
       label: "Total Reports",
@@ -278,6 +281,20 @@ const Dashboard = () => {
       note: topPlace ? "Location with the highest number of submitted reports" : "Place trends appear once data loads",
       icon: <MapPin className="h-5 w-5 text-rose-600" />,
       shell: "bg-rose-50",
+    },
+    {
+      label: "Fixi Chats",
+      value: stats?.chat?.total || 0,
+      note: `${stats?.chat?.this_week || 0} support chats this week`,
+      icon: <MessageSquare className="h-5 w-5 text-teal-600" />,
+      shell: "bg-teal-50",
+    },
+    {
+      label: "Pending AI Replies",
+      value: stats?.chat?.pending || 0,
+      note: "Saved user prompts waiting for completion",
+      icon: <Clock className="h-5 w-5 text-slate-600" />,
+      shell: "bg-slate-100",
     },
   ];
 
@@ -591,6 +608,13 @@ const Dashboard = () => {
                                 <Link to={`/reports/${report.id}`} className="font-medium text-slate-900 hover:underline">
                                   {report.title}
                                 </Link>
+                                {report.image_url && (
+                                  <img
+                                    src={report.image_url}
+                                    alt={report.title}
+                                    className="mt-3 h-24 w-full max-w-[280px] rounded-2xl object-cover ring-1 ring-slate-200"
+                                  />
+                                )}
                                 <p className="mt-1 max-w-[280px] text-xs leading-5 text-slate-500">
                                   {report.description}
                                 </p>
@@ -798,6 +822,51 @@ const Dashboard = () => {
                       ))
                     ) : (
                       <p className="py-4 text-sm text-slate-500">Hotspots appear once reports start clustering.</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-slate-200 shadow-sm dark:border-[#d7e5e3] dark:bg-white">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg text-slate-900">Fixi AI Support</CardTitle>
+                    <CardDescription>Recent chatbot prompts saved from user support sessions.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {recentChats.length > 0 ? (
+                      recentChats.map((chat, index) => (
+                        <div key={chat.id || index} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="line-clamp-2 text-sm font-medium text-slate-900">{chat.user_message}</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {chat.topic || "support"} · {chat.status || "completed"}
+                              </p>
+                            </div>
+                            <MessageSquare className="h-4 w-4 flex-shrink-0 text-teal-600" />
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="py-4 text-sm text-slate-500">Fixi chat prompts will appear after users ask questions.</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-slate-200 shadow-sm dark:border-[#d7e5e3] dark:bg-white">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg text-slate-900">Support Topics</CardTitle>
+                    <CardDescription>What users are asking Fixi about most often.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {chatTopics.length > 0 ? (
+                      chatTopics.map((topic) => (
+                        <div key={topic.topic} className="flex items-center justify-between rounded-2xl bg-slate-50 p-3">
+                          <p className="text-sm font-medium text-slate-900">{topic.topic}</p>
+                          <Badge variant="secondary">{topic.count}</Badge>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="py-4 text-sm text-slate-500">Topic trends appear once Fixi has saved chats.</p>
                     )}
                   </CardContent>
                 </Card>

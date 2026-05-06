@@ -16,6 +16,14 @@ services:
         sync: false
       - key: MONGO_URL
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_CHAT_MODEL
+        value: gpt-4o-mini
+      - key: CHAT_MAX_TOKENS
+        value: "500"
+      - key: CHAT_PROVIDER_ORDER
+        value: openrouter,openai
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENROUTER_CHAT_MODEL

@@ -27,6 +27,7 @@ const FixiChatbot = () => {
   const [isRecording, setIsRecording] = useState(false);
   const scrollRef = useRef(null);
   const recognitionRef = useRef(null);
+  const historyLoadedRef = useRef(false);
 
   useEffect(() => {
     setMessages((prev) => {
@@ -54,6 +55,36 @@ const FixiChatbot = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (!isOpen || historyLoadedRef.current || messages.length > 1) return;
+
+      try {
+        const response = await api.get("/chat/history");
+        const savedHistory = Array.isArray(response.data) ? response.data : [];
+        const orderedHistory = savedHistory.slice(0, 20).reverse();
+        const restoredMessages = orderedHistory.flatMap((item) => {
+          const turns = [{ role: "user", content: item.user_message }];
+          if (item.bot_response) {
+            turns.push({ role: "bot", content: item.bot_response });
+          }
+          return turns;
+        }).filter((item) => item.content);
+
+        if (restoredMessages.length) {
+          setMessages([{ role: "bot", content: t.chatbotGreeting }, ...restoredMessages]);
+          setSessionId(orderedHistory[orderedHistory.length - 1]?.session_id || null);
+        }
+      } catch (error) {
+        console.error("Failed to load Fixi chat history", error);
+      } finally {
+        historyLoadedRef.current = true;
+      }
+    };
+
+    loadChatHistory();
+  }, [api, isOpen, messages.length, t.chatbotGreeting]);
 
   const sendMessage = async (messageOverride = null) => {
     const userMessage = (messageOverride ?? input).trim();
